@@ -6,6 +6,12 @@ system, and deterministic weekly meal planner.
 Published recipes are public. Administrator-created accounts may add and manage
 their own recipes. Meal plans remain private to their owner.
 
+Repository: [github.com/Brazenbillygoat/common-table](https://github.com/Brazenbillygoat/common-table)
+
+The current application supports authenticated recipe drafts, including
+creating drafts and adding, editing, reordering, and deleting ingredient lines.
+Recipe discovery and meal planning are still in development.
+
 ## Stack
 
 - Next.js App Router, React, and TypeScript
