@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 
+import { MobileNavigation } from "@/components/navigation/MobileNavigation";
+import { SiteHeader } from "@/components/navigation/SiteHeader";
+import navigationStyles from "@/components/navigation/navigation.module.scss";
+import { getCurrentSession } from "@/server/auth/session";
+
 import "@/styles/globals.scss";
 
 export const metadata: Metadata = {
@@ -19,18 +24,27 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getCurrentSession();
+  const viewer = session
+    ? {
+        displayName: session.user.name,
+      }
+    : null;
+
   return (
     <html lang="en">
       <body>
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
-        {children}
+        <SiteHeader viewer={viewer} />
+        <div className={navigationStyles.appFrame}>{children}</div>
+        <MobileNavigation />
       </body>
     </html>
   );

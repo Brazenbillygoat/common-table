@@ -1,0 +1,144 @@
+.page {
+  width: min(100%, 48rem);
+}
+
+.status {
+  color: var(--color-accent);
+  font-weight: 800;
+}
+
+.eyebrow {
+  margin-bottom: 0.25rem;
+  color: var(--color-accent);
+  font-weight: 800;
+}
+
+.recipeTitle {
+  margin-bottom: 0;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.emptyState,
+.lineList {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.lineList {
+  padding-left: 0;
+  list-style: none;
+}
+
+.line {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+
+.lineText {
+  font-weight: 700;
+}
+
+.lineActions,
+.formActions,
+.deleteConfirmation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.lineActions button,
+.formActions button,
+.deleteConfirmation button,
+.addButton,
+.banner button {
+  min-height: 44px;
+  padding: 0.55rem 0.8rem;
+}
+
+.form {
+  display: grid;
+  gap: 1rem;
+  margin: 1.25rem 0;
+  padding: 1.25rem 0;
+  border-block: 1px solid var(--color-border);
+}
+
+.form fieldset {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.form legend,
+.form label {
+  font-weight: 800;
+}
+
+.form input:not([type="checkbox"]),
+.form select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.checkbox {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  min-height: 44px;
+}
+
+.checkbox input {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.error,
+.errorSummary {
+  color: var(--color-error);
+}
+
+.error {
+  margin: 0;
+}
+
+.errorSummary,
+.banner {
+  padding: 1rem;
+  border: 2px solid var(--color-error);
+  border-radius: var(--radius-medium);
+}
+
+.errorSummary h2,
+.banner h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+
+.deleteConfirmation {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-left: 3px solid var(--color-error);
+}
+
+.deleteConfirmation p {
+  width: 100%;
+  margin: 0;
+  font-weight: 800;
+}
+
+.addButton {
+  margin-top: 1rem;
+  font-weight: 800;
+}

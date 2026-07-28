@@ -1,12 +1,13 @@
 export default function Home() {
   return (
     <main className="page-shell" id="main-content">
-      <p>Common Table</p>
-      <h1>Your recipes, connected.</h1>
+      <p>Public recipe browsing</p>
+      <h1>Welcome to Common Table.</h1>
       <p>
-        The application foundation is ready. Recipe browsing, structured creation, and meal planning
-        will arrive in reviewable slices.
+        Common Table is a personal cookbook for finding recipes and planning meals with a small
+        family group.
       </p>
+      <p>Published recipes will appear here after the recipe vertical slice is implemented.</p>
     </main>
   );
 }

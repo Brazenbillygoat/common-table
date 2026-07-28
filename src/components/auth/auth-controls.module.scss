@@ -1,0 +1,29 @@
+.control {
+  display: grid;
+  justify-items: end;
+  gap: 0.25rem;
+}
+
+.button {
+  min-height: 2.75rem;
+  padding: 0.625rem 0.875rem;
+  color: var(--color-accent);
+  font-weight: 700;
+  background: transparent;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-small);
+  cursor: pointer;
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.error {
+  max-width: 14rem;
+  margin: 0;
+  color: var(--color-error);
+  font-size: 0.8125rem;
+  text-align: right;
+}

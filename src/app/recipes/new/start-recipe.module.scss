@@ -1,0 +1,222 @@
+.page {
+  width: min(100%, 42rem);
+}
+
+.header {
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  margin: 0.5rem 0 0.75rem;
+  font-size: clamp(2rem, 10vw, 3.5rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.header > p:last-child {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.form {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.field {
+  display: grid;
+  min-width: 0;
+  gap: 0.375rem;
+}
+
+.field label,
+.yieldFieldset legend {
+  font-weight: 800;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.75rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+}
+
+.field textarea {
+  min-height: 6.5rem;
+  resize: vertical;
+}
+
+.field input[aria-invalid="true"],
+.field textarea[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+
+.helper,
+.error {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.helper {
+  color: var(--color-muted);
+}
+
+.error {
+  color: var(--color-error);
+}
+
+.yieldFieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 1rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.yieldGrid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.rangeButton,
+.submitButton,
+.serverBanner button {
+  min-height: 2.75rem;
+  padding: 0.625rem 1rem;
+  font-weight: 800;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+}
+
+.rangeButton {
+  margin-top: 1rem;
+  color: var(--color-accent);
+  background: transparent;
+  border: 1px solid var(--color-accent);
+}
+
+.submitButton,
+.serverBanner button {
+  width: fit-content;
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}
+
+.submitButton:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.errorSummary,
+.serverBanner {
+  padding: 1rem;
+  border-radius: var(--radius-small);
+}
+
+.errorSummary {
+  color: var(--color-error);
+  background: var(--color-error-soft);
+}
+
+.errorSummary h2,
+.serverBanner h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.errorSummary ul {
+  margin-bottom: 0;
+  padding-left: 1.25rem;
+}
+
+.errorSummary a {
+  font-weight: 700;
+}
+
+.serverBanner {
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  background: var(--color-error-soft);
+  border: 1px solid var(--color-error);
+}
+
+.serverBanner p {
+  margin: 0;
+}
+
+.liveStatus {
+  min-height: 1.25rem;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.skeleton {
+  display: grid;
+  gap: 1.5rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton span {
+  display: block;
+  background: var(--color-border);
+  border-radius: var(--radius-small);
+}
+
+.skeletonHeading {
+  width: 65%;
+  height: 3rem;
+}
+
+.skeletonInput {
+  height: 2.75rem;
+}
+
+.skeletonTextarea {
+  height: 6.5rem;
+}
+
+.skeletonButton {
+  width: 9rem;
+  height: 2.75rem;
+}
+
+@media (min-width: 40rem) {
+  .yieldGridSingle {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .yieldGridRange {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
