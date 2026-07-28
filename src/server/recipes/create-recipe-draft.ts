@@ -44,6 +44,7 @@ export async function createRecipeDraft({
   const database = getDatabase();
   const baseSlug = createRecipeSlugBase(input.title);
 
+  // Another request can claim this slug before the insert, so the unique constraint gets the final say.
   for (let attempt = 0; attempt <= maximumRetries; attempt += 1) {
     const existingRows = await database
       .select({ slug: recipe.slug })
@@ -55,6 +56,7 @@ export async function createRecipeDraft({
     );
 
     try {
+      // Create the draft and its first section together so neither can exist without the other.
       return await database.transaction(async (transaction) => {
         const [created] = await transaction
           .insert(recipe)
@@ -96,6 +98,7 @@ export async function createRecipeDraft({
         };
       });
     } catch (error) {
+      // Only retry the slug collision. Other database errors need to reach the caller.
       if (!isSlugCollision(error) || attempt === maximumRetries) {
         throw error;
       }

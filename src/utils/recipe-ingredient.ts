@@ -24,6 +24,7 @@ export const ingredientMessages = {
 const decimalPattern = /^\d+(?:\.\d+)?$/;
 const uuidOrEmpty = z.union([z.literal(""), z.string().uuid()]);
 
+// Validate raw form strings in both the browser and API before converting them to database values.
 export const recipeIngredientRequestSchema = z
   .object({
     expectedVersion: z.number().int().positive(),
@@ -166,6 +167,8 @@ export function normalizeRecipeIngredient(
   input: RecipeIngredientRequest,
 ): NormalizedRecipeIngredient {
   const textQuantity = input.quantityMode === "text";
+
+  // Keep only values used by the selected modes so hidden fields cannot conflict.
   return {
     ingredientId: input.ingredientSource === "canonical" ? input.ingredientId : null,
     customIngredient: input.ingredientSource === "custom" ? input.customIngredient.trim() : null,

@@ -119,6 +119,7 @@ const ingredients = [
 async function seed() {
   const db = getDatabase();
 
+  // The unique constraints make this safe to rerun without duplicating reference data.
   await db
     .insert(unit)
     .values(

@@ -13,6 +13,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ recipeId: string }> },
 ) {
+  // Next.js provides dynamic route params as a promise.
   const { recipeId } = await params;
   if (!z.string().uuid().safeParse(recipeId).success) {
     return validationResponse({ recipeId: ["Invalid recipe ID."] });
@@ -27,6 +28,8 @@ export async function POST(
   if (!validation.success) {
     return validationResponse(validation.error.flatten().fieldErrors);
   }
+
+  // API routes return JSON errors, so use getCurrentSession() instead of the redirecting page guard.
   const session = await getCurrentSession();
   if (!session) {
     return authResponse();

@@ -10,6 +10,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Database integration tests are opt-in because they need the local PostgreSQL container.
     exclude:
       process.env.RUN_DATABASE_TESTS === "1"
         ? configDefaults.exclude

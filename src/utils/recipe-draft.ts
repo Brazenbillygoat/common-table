@@ -3,6 +3,7 @@ import { z } from "zod";
 const maximumYield = 9_999_999.999;
 const decimalPattern = /^\d+(?:\.\d{1,3})?$/;
 
+// Validate the raw string before converting it so fractions and extra decimal places are not silently changed.
 function decimalField(label: "starting" | "ending") {
   const positiveMessage =
     label === "starting"

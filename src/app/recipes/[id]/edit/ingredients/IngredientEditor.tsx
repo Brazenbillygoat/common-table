@@ -48,6 +48,7 @@ const fieldIds: Record<keyof FormValues, string> = {
 export function IngredientEditor({ data }: { data: RecipeIngredientEditorData }) {
   const router = useRouter();
   const [lines, setLines] = useState(data.lines);
+  // Keep the last server-confirmed version so stale edits can be rejected.
   const [version, setVersion] = useState(data.recipe.version);
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<FormValues>(emptyForm);
@@ -56,12 +57,14 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
   const [banner, setBanner] = useState<Banner>("none");
   const [status, setStatus] = useState("Draft saved");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // The ref updates immediately and blocks a second submit before React renders the pending state.
   const mutationLock = useRef(false);
   const bannerRef = useRef<HTMLDivElement>(null);
   const editButtons = useRef(new Map<string, HTMLButtonElement>());
 
   useEffect(() => {
     if (editingId !== null) {
+      // Wait until the conditional form is in the DOM before moving focus into it.
       queueMicrotask(() => {
         document
           .getElementById(
@@ -108,6 +111,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
   function updateField<Key extends keyof FormValues>(key: Key, value: FormValues[Key]) {
     setForm((current) => {
       const next = { ...current, [key]: value };
+      // Clear fields hidden by the new mode so stale values cannot be submitted.
       if (key === "quantityMode") {
         if (value === "none") {
           next.quantityMin = "";
@@ -155,6 +159,8 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
       : `/api/recipes/${data.recipe.id}/ingredients/${editingId}`;
     const result = await mutate(endpoint, isNew ? "POST" : "PATCH", validation.data);
     if (!result) return;
+
+    // Update the list only after the server confirms that the transaction succeeded.
     const line = result.line as RecipeIngredientLine;
     setVersion(result.version as number);
     setLines((current) =>

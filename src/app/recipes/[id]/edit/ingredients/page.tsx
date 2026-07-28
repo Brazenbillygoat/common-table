@@ -20,11 +20,14 @@ export default async function IngredientStagePage({ params }: { params: Promise<
     notFound();
   }
 
+  // This is a Server Component, so it can load the editor without shipping database code to the browser.
   const editor = await getOwnedRecipeIngredientEditor(id, session.user.id);
   if (!editor) {
+    // Missing and unauthorized drafts intentionally share the same response.
     notFound();
   }
 
+  // The version key remounts the editor after router.refresh() so stale client state is thrown away.
   return (
     <main className={`${styles.page} page-shell`} id="main-content">
       <header>

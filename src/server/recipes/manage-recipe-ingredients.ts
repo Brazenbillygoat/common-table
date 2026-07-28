@@ -48,6 +48,7 @@ interface ReorderArguments extends MutationArguments {
   ingredientIds: string[];
 }
 
+// Each mutation uses one transaction, so an error rolls back both the version and ingredient changes.
 export async function createRecipeIngredientLine({
   actorUserId,
   recipeId,
@@ -192,6 +193,7 @@ export async function reorderRecipeIngredientLines({
     if (current.length > 0) {
       const maximumPosition = Math.max(...current.map((line) => line.position));
       const offset = maximumPosition + current.length + 1;
+      // Move every row out of the final range first to avoid collisions with the unique position constraint.
       await transaction
         .update(recipeIngredient)
         .set({ position: sql`${recipeIngredient.position} + ${offset}` })
@@ -216,6 +218,7 @@ export async function reorderRecipeIngredientLines({
 type Transaction = Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0];
 
 async function validateReferences(transaction: Transaction, input: NormalizedRecipeIngredient) {
+  // Recheck references here because an ingredient or unit may have been disabled since the form loaded.
   if (input.ingredientId) {
     const [activeIngredient] = await transaction
       .select({ id: ingredient.id })
@@ -244,6 +247,7 @@ async function advanceVersion(
   actorUserId: string,
   expectedVersion: number,
 ) {
+  // This update checks ownership, draft status, and version before incrementing the version.
   const [updated] = await transaction
     .update(recipe)
     .set({ version: sql`${recipe.version} + 1`, updatedAt: new Date() })
@@ -259,6 +263,8 @@ async function advanceVersion(
   if (updated) {
     return updated.version;
   }
+
+  // Check again to tell stale data from unavailable data without revealing another user's recipe.
   const [ownedDraft] = await transaction
     .select({ id: recipe.id })
     .from(recipe)

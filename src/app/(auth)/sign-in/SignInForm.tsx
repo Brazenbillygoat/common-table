@@ -55,6 +55,7 @@ export function SignInForm() {
       }
 
       router.replace("/");
+      // Refresh so Server Components that read the new session cookie render again.
       router.refresh();
     } catch {
       resetField("password");

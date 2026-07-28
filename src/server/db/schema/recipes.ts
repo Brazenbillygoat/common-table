@@ -152,6 +152,7 @@ export const recipeIngredient = pgTable(
     isOptional: boolean("is_optional").notNull().default(false),
   },
   (table) => [
+    // Pair the section ID with the recipe ID so an ingredient cannot point at another recipe's section.
     foreignKey({
       name: "recipe_ingredients_section_recipe_fk",
       columns: [table.sectionId, table.recipeId],
@@ -161,6 +162,7 @@ export const recipeIngredient = pgTable(
     index("recipe_ingredients_recipe_id_idx").on(table.recipeId),
     index("recipe_ingredients_ingredient_id_idx").on(table.ingredientId),
     check("recipe_ingredients_position_nonnegative", sql`${table.position} >= 0`),
+    // Each line uses either a canonical ingredient or custom text, never both.
     check(
       "recipe_ingredients_exactly_one_ingredient",
       sql`
@@ -232,6 +234,7 @@ export const recipeTaxonomyValue = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    // Include the kind in the foreign key so a cuisine ID cannot be stored as a dietary value.
     foreignKey({
       name: "recipe_taxonomy_values_canonical_kind_fk",
       columns: [table.taxonomyValueId, table.kind],

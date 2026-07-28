@@ -30,6 +30,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await getCurrentSession();
+  // Only pass the display name to client-side navigation, not the full session.
   const viewer = session
     ? {
         displayName: session.user.name,

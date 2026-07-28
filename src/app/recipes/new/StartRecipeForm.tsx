@@ -34,6 +34,7 @@ export function StartRecipeForm() {
   const [rangeEnabled, setRangeEnabled] = useState(false);
   const [unitFocused, setUnitFocused] = useState(false);
   const [serverState, setServerState] = useState<ServerState>({ kind: "none" });
+  // Block a second submit before React has rendered the isSubmitting state.
   const submissionLock = useRef(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const serverBannerRef = useRef<HTMLDivElement>(null);
@@ -50,6 +51,7 @@ export function StartRecipeForm() {
       yieldMax: "",
       yieldUnit: "",
     },
+    // The shared schema gives quick feedback here, but the API validates the request again.
     resolver: zodResolver(recipeDraftSchema),
   });
 

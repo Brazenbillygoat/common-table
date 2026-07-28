@@ -28,6 +28,7 @@ const globalForDatabase = globalThis as typeof globalThis & {
 };
 
 export function getDatabase() {
+  // Cache the pool during development so hot reloads do not keep opening PostgreSQL connections.
   if (!globalForDatabase.commonTableDatabase) {
     globalForDatabase.commonTableDatabase = createDatabase();
   }
