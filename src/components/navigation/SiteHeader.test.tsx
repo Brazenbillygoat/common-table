@@ -18,16 +18,17 @@ vi.mock("@/components/auth/auth-client", () => ({
 }));
 
 describe("SiteHeader", () => {
-  it("shows sign in and no sign-out control for a signed-out visitor", () => {
+  it("shows sign in, theme control, and no sign-out control for a signed-out visitor", async () => {
     render(<SiteHeader viewer={null} />);
 
     expect(screen.getByRole("link", { name: "Sign in" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Switch to dark mode" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "My Recipes" })).toHaveAttribute("href", "/recipes");
     expect(screen.queryByRole("link", { name: "Create Recipe" })).not.toBeInTheDocument();
   });
 
-  it("shows only the signed-in display name and sign-out control", () => {
+  it("shows only the signed-in display name, theme control, and sign-out control", async () => {
     const viewer = {
       displayName: "Hyrum",
       email: "hyrum@example.com",
@@ -36,6 +37,7 @@ describe("SiteHeader", () => {
     render(<SiteHeader viewer={viewer} />);
 
     expect(screen.getByText("Hyrum")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Switch to dark mode" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(screen.queryByText("hyrum@example.com")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Sign in" })).not.toBeInTheDocument();

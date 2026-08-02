@@ -10,6 +10,7 @@ import {
   recipeIngredientRequestSchema,
 } from "@/utils/recipe-ingredient";
 
+import { IngredientPicker } from "./IngredientPicker";
 import styles from "./ingredient-stage.module.scss";
 
 type FormValues = Omit<RecipeIngredientRequest, "expectedVersion">;
@@ -52,6 +53,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
   const [version, setVersion] = useState(data.recipe.version);
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<FormValues>(emptyForm);
+  const [ingredientQuery, setIngredientQuery] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [pending, setPending] = useState(false);
   const [banner, setBanner] = useState<Banner>("none");
@@ -85,6 +87,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
 
   function openNew() {
     setForm(emptyForm);
+    setIngredientQuery("");
     setFieldErrors({});
     setBanner("none");
     setEditingId("new");
@@ -92,6 +95,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
 
   function openEdit(line: RecipeIngredientLine) {
     setForm(formFromLine(line));
+    setIngredientQuery(line.ingredientId ? line.ingredientName : "");
     setFieldErrors({});
     setBanner("none");
     setDeletingId(null);
@@ -103,6 +107,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
     setEditingId(null);
     setFieldErrors({});
     setForm(emptyForm);
+    setIngredientQuery("");
     if (previousId && previousId !== "new") {
       queueMicrotask(() => editButtons.current.get(previousId)?.focus());
     }
@@ -170,6 +175,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
     );
     setEditingId(null);
     setForm(emptyForm);
+    setIngredientQuery("");
     setStatus("Ingredient saved.");
   }
 
@@ -289,8 +295,10 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                   data={data}
                   fieldErrors={fieldErrors}
                   form={form}
+                  ingredientQuery={ingredientQuery}
                   pending={pending}
                   submit={submit}
+                  setIngredientQuery={setIngredientQuery}
                   updateField={updateField}
                   validationEntries={validationEntries}
                   cancel={cancelEdit}
@@ -358,8 +366,10 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
           data={data}
           fieldErrors={fieldErrors}
           form={form}
+          ingredientQuery={ingredientQuery}
           pending={pending}
           submit={submit}
+          setIngredientQuery={setIngredientQuery}
           updateField={updateField}
           validationEntries={validationEntries}
           cancel={cancelEdit}
@@ -383,12 +393,14 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
 interface IngredientFormProps {
   data: RecipeIngredientEditorData;
   form: FormValues;
+  ingredientQuery: string;
   fieldErrors: Record<string, string[]>;
   validationEntries: { field: keyof FormValues; message: string }[];
   pending: boolean;
   submitLabel: string;
   submit: (event: FormEvent<HTMLFormElement>) => void;
   cancel: () => void;
+  setIngredientQuery: (query: string) => void;
   updateField: <Key extends keyof FormValues>(key: Key, value: FormValues[Key]) => void;
 }
 
@@ -403,10 +415,43 @@ function IngredientForm(props: IngredientFormProps) {
   function error(field: keyof FormValues) {
     return fieldErrors[field]?.[0];
   }
+  function visibleFieldId(field: keyof FormValues) {
+    return field === "unitId" ? fieldIds.unitSource : fieldIds[field];
+  }
   function focusField(event: MouseEvent<HTMLAnchorElement>, field: keyof FormValues) {
     event.preventDefault();
-    document.getElementById(fieldIds[field])?.focus();
+    document.getElementById(visibleFieldId(field))?.focus();
   }
+  function focusWhenVisible(field: keyof FormValues) {
+    queueMicrotask(() => document.getElementById(visibleFieldId(field))?.focus());
+  }
+  function updateQuantityMinimum(value: string) {
+    if (form.quantityMode === "single" && value === "") {
+      updateField("quantityMode", "none");
+      return;
+    }
+    if (form.quantityMode === "none" && value !== "") {
+      updateField("quantityMode", "single");
+    }
+    updateField("quantityMin", value);
+  }
+  function chooseUnit(value: string) {
+    if (value === "__none") {
+      updateField("unitSource", "none");
+    } else if (value === "__custom") {
+      updateField("unitSource", "custom");
+      focusWhenVisible("customUnit");
+    } else {
+      updateField("unitSource", "canonical");
+      updateField("unitId", value);
+    }
+  }
+  const selectedUnit =
+    form.unitSource === "canonical"
+      ? form.unitId
+      : form.unitSource === "custom"
+        ? "__custom"
+        : "__none";
   return (
     <form className={styles.form} noValidate onSubmit={props.submit}>
       {props.validationEntries.length > 0 ? (
@@ -415,7 +460,7 @@ function IngredientForm(props: IngredientFormProps) {
           <ul>
             {props.validationEntries.map(({ field, message }) => (
               <li key={`${field}-${message}`}>
-                <a href={`#${fieldIds[field]}`} onClick={(event) => focusField(event, field)}>
+                <a href={`#${visibleFieldId(field)}`} onClick={(event) => focusField(event, field)}>
                   {message}
                 </a>
               </li>
@@ -423,36 +468,27 @@ function IngredientForm(props: IngredientFormProps) {
           </ul>
         </div>
       ) : null}
-      <fieldset>
+      <fieldset className={styles.formSection}>
         <legend>Ingredient</legend>
-        <label htmlFor={fieldIds.ingredientSource}>Ingredient type</label>
-        <select
-          id={fieldIds.ingredientSource}
-          onChange={(event) =>
-            updateField("ingredientSource", event.target.value as FormValues["ingredientSource"])
-          }
-          value={form.ingredientSource}
-        >
-          <option value="canonical">Ingredient list</option>
-          <option value="custom">Other</option>
-        </select>
         {form.ingredientSource === "canonical" ? (
           <>
-            <label htmlFor={fieldIds.ingredientId}>Ingredient</label>
-            <select
-              aria-describedby={error("ingredientId") ? "ingredient-id-error" : undefined}
-              aria-invalid={Boolean(error("ingredientId"))}
-              id={fieldIds.ingredientId}
-              onChange={(event) => updateField("ingredientId", event.target.value)}
-              value={form.ingredientId}
-            >
-              <option value="">Choose an ingredient</option>
-              {props.data.ingredientOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
+            <IngredientPicker
+              errorId={error("ingredientId") ? "ingredient-id-error" : undefined}
+              inputId={fieldIds.ingredientId}
+              invalid={Boolean(error("ingredientId"))}
+              onChooseCustom={() => {
+                props.setIngredientQuery("");
+                updateField("ingredientSource", "custom");
+              }}
+              onQueryChange={(query) => {
+                props.setIngredientQuery(query);
+                if (form.ingredientId) updateField("ingredientId", "");
+              }}
+              onSelect={(id) => updateField("ingredientId", id)}
+              options={props.data.ingredientOptions}
+              query={props.ingredientQuery}
+              selectedId={form.ingredientId}
+            />
             <FieldError id="ingredient-id-error" message={error("ingredientId")} />
           </>
         ) : (
@@ -467,39 +503,70 @@ function IngredientForm(props: IngredientFormProps) {
               value={form.customIngredient}
             />
             <FieldError id="custom-ingredient-error" message={error("customIngredient")} />
+            <button
+              className={styles.textAction}
+              onClick={() => {
+                updateField("ingredientSource", "canonical");
+                props.setIngredientQuery("");
+              }}
+              type="button"
+            >
+              Choose from ingredient list
+            </button>
           </>
         )}
       </fieldset>
-      <fieldset>
-        <legend>Quantity</legend>
-        <label htmlFor={fieldIds.quantityMode}>Quantity type</label>
-        <select
-          id={fieldIds.quantityMode}
-          onChange={(event) =>
-            updateField("quantityMode", event.target.value as FormValues["quantityMode"])
-          }
-          value={form.quantityMode}
-        >
-          <option value="none">None</option>
-          <option value="single">Amount</option>
-          <option value="range">Range</option>
-          <option value="text">Text</option>
-        </select>
-        {form.quantityMode === "single" || form.quantityMode === "range" ? (
+      <fieldset className={styles.formSection}>
+        <legend>
+          Quantity <span className={styles.legendQualifier}>(optional)</span>
+        </legend>
+        {form.quantityMode !== "text" ? (
           <>
             <label htmlFor={fieldIds.quantityMin}>
-              {form.quantityMode === "range" ? "Starting amount" : "Amount"}
+              {form.quantityMode === "range" ? "Starting amount" : "Amount (optional)"}
             </label>
             <input
               aria-describedby={error("quantityMin") ? "quantity-min-error" : undefined}
               aria-invalid={Boolean(error("quantityMin"))}
               id={fieldIds.quantityMin}
               inputMode="decimal"
-              onChange={(event) => updateField("quantityMin", event.target.value)}
+              onChange={(event) => updateQuantityMinimum(event.target.value)}
               type="text"
               value={form.quantityMin}
             />
             <FieldError id="quantity-min-error" message={error("quantityMin")} />
+            <div className={styles.progressiveActions}>
+              {form.quantityMode === "range" ? (
+                <button
+                  className={styles.textAction}
+                  onClick={() => updateField("quantityMode", "single")}
+                  type="button"
+                >
+                  Remove ending amount
+                </button>
+              ) : (
+                <button
+                  className={styles.textAction}
+                  onClick={() => {
+                    updateField("quantityMode", "range");
+                    focusWhenVisible("quantityMax");
+                  }}
+                  type="button"
+                >
+                  Add an ending amount
+                </button>
+              )}
+              <button
+                className={styles.textAction}
+                onClick={() => {
+                  updateField("quantityMode", "text");
+                  focusWhenVisible("quantityText");
+                }}
+                type="button"
+              >
+                Use a written quantity
+              </button>
+            </div>
           </>
         ) : null}
         {form.quantityMode === "range" ? (
@@ -529,84 +596,88 @@ function IngredientForm(props: IngredientFormProps) {
               value={form.quantityText}
             />
             <FieldError id="quantity-text-error" message={error("quantityText")} />
+            <button
+              className={styles.textAction}
+              onClick={() => {
+                updateField("quantityMode", "none");
+                focusWhenVisible("quantityMin");
+              }}
+              type="button"
+            >
+              Use a numeric amount
+            </button>
+          </>
+        ) : null}
+        {form.quantityMode !== "text" ? (
+          <>
+            <label htmlFor={fieldIds.unitSource}>Unit (optional)</label>
+            <select
+              aria-describedby={error("unitId") ? "unit-id-error" : undefined}
+              aria-invalid={Boolean(error("unitId"))}
+              id={fieldIds.unitSource}
+              onChange={(event) => chooseUnit(event.target.value)}
+              value={selectedUnit}
+            >
+              <option value="__none">No unit</option>
+              {props.data.unitOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+              <option value="__custom">Other unit...</option>
+            </select>
+            <FieldError id="unit-id-error" message={error("unitId")} />
+            {form.unitSource === "custom" ? (
+              <>
+                <label htmlFor={fieldIds.customUnit}>Other unit</label>
+                <input
+                  aria-describedby={error("customUnit") ? "custom-unit-error" : undefined}
+                  aria-invalid={Boolean(error("customUnit"))}
+                  id={fieldIds.customUnit}
+                  maxLength={40}
+                  onChange={(event) => updateField("customUnit", event.target.value)}
+                  value={form.customUnit}
+                />
+                <FieldError id="custom-unit-error" message={error("customUnit")} />
+              </>
+            ) : null}
           </>
         ) : null}
       </fieldset>
-      {form.quantityMode !== "text" ? (
-        <fieldset>
-          <legend>Unit</legend>
-          <label htmlFor={fieldIds.unitSource}>Unit type</label>
-          <select
-            id={fieldIds.unitSource}
-            onChange={(event) =>
-              updateField("unitSource", event.target.value as FormValues["unitSource"])
-            }
-            value={form.unitSource}
-          >
-            <option value="none">None</option>
-            <option value="canonical">Unit list</option>
-            <option value="custom">Other</option>
-          </select>
-          {form.unitSource === "canonical" ? (
-            <>
-              <label htmlFor={fieldIds.unitId}>Unit</label>
-              <select
-                aria-describedby={error("unitId") ? "unit-id-error" : undefined}
-                aria-invalid={Boolean(error("unitId"))}
-                id={fieldIds.unitId}
-                onChange={(event) => updateField("unitId", event.target.value)}
-                value={form.unitId}
-              >
-                <option value="">Choose a unit</option>
-                {props.data.unitOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-              <FieldError id="unit-id-error" message={error("unitId")} />
-            </>
-          ) : null}
-          {form.unitSource === "custom" ? (
-            <>
-              <label htmlFor={fieldIds.customUnit}>Other unit</label>
-              <input
-                aria-describedby={error("customUnit") ? "custom-unit-error" : undefined}
-                aria-invalid={Boolean(error("customUnit"))}
-                id={fieldIds.customUnit}
-                maxLength={40}
-                onChange={(event) => updateField("customUnit", event.target.value)}
-                value={form.customUnit}
-              />
-              <FieldError id="custom-unit-error" message={error("customUnit")} />
-            </>
-          ) : null}
-        </fieldset>
-      ) : null}
-      <label htmlFor={fieldIds.preparationNote}>Preparation note (optional)</label>
-      <input
-        aria-describedby={error("preparationNote") ? "preparation-note-error" : undefined}
-        aria-invalid={Boolean(error("preparationNote"))}
-        id={fieldIds.preparationNote}
-        maxLength={200}
-        onChange={(event) => updateField("preparationNote", event.target.value)}
-        value={form.preparationNote}
-      />
-      <FieldError id="preparation-note-error" message={error("preparationNote")} />
-      <label className={styles.checkbox} htmlFor={fieldIds.isOptional}>
+      <fieldset className={styles.formSection}>
+        <legend>
+          Details <span className={styles.legendQualifier}>(optional)</span>
+        </legend>
+        <label htmlFor={fieldIds.preparationNote}>Preparation note</label>
         <input
-          checked={form.isOptional}
-          id={fieldIds.isOptional}
-          onChange={(event) => updateField("isOptional", event.target.checked)}
-          type="checkbox"
+          aria-describedby={error("preparationNote") ? "preparation-note-error" : undefined}
+          aria-invalid={Boolean(error("preparationNote"))}
+          id={fieldIds.preparationNote}
+          maxLength={200}
+          onChange={(event) => updateField("preparationNote", event.target.value)}
+          value={form.preparationNote}
         />
-        Optional ingredient
-      </label>
+        <FieldError id="preparation-note-error" message={error("preparationNote")} />
+        <label className={styles.checkbox} htmlFor={fieldIds.isOptional}>
+          <input
+            checked={form.isOptional}
+            id={fieldIds.isOptional}
+            onChange={(event) => updateField("isOptional", event.target.checked)}
+            type="checkbox"
+          />
+          This ingredient is optional
+        </label>
+      </fieldset>
       <div className={styles.formActions}>
-        <button disabled={props.pending} type="submit">
+        <button className={styles.primaryAction} disabled={props.pending} type="submit">
           {props.submitLabel}
         </button>
-        <button disabled={props.pending} onClick={props.cancel} type="button">
+        <button
+          className={styles.secondaryAction}
+          disabled={props.pending}
+          onClick={props.cancel}
+          type="button"
+        >
           Cancel
         </button>
       </div>

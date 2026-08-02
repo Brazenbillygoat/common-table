@@ -34,6 +34,10 @@ yarn-error.log*
 .env*
 !.env.example
 
+# local repository context
+/AGENTS.md
+/docs/PROJECT_CONTEXT.md
+
 # local implementation handoff
 /docs/ACTIVE_PLAN.md
 

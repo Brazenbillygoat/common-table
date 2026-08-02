@@ -1,0 +1,21 @@
+.navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.25rem 0 2rem;
+}
+
+.navigation a {
+  display: inline-flex;
+  min-height: 44px;
+  padding: 0.6rem 0.8rem;
+  align-items: center;
+  border-radius: var(--radius-small);
+  font-weight: 800;
+}
+
+.navigation a[aria-current="page"] {
+  background: var(--color-accent);
+  color: var(--color-surface);
+  text-decoration: none;
+}

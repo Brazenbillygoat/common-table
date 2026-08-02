@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 import styles from "./navigation.module.scss";
 
@@ -32,6 +33,7 @@ export function SiteHeader({ viewer }: SiteHeaderProps) {
           ))}
         </nav>
         <div className={styles.account}>
+          <ThemeToggle />
           {viewer ? (
             <>
               <span className={styles.displayName}>{viewer.displayName}</span>

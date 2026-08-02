@@ -49,7 +49,7 @@ export default async function MyRecipesPage() {
                   </time>
                 </p>
               </div>
-              <Link href={`/recipes/${draft.id}/edit/ingredients`}>Continue ingredients</Link>
+              <Link href={`/recipes/${draft.id}/edit/ingredients`}>Edit recipe</Link>
             </li>
           ))}
         </ul>

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireUser } from "@/server/auth/session";
 import { getOwnedRecipeIngredientEditor } from "@/server/recipes/get-owned-recipe-ingredient-editor";
 
+import { RecipeEditNavigation } from "../RecipeEditNavigation";
 import { IngredientEditor } from "./IngredientEditor";
 import styles from "./ingredient-stage.module.scss";
 
@@ -35,6 +36,7 @@ export default async function IngredientStagePage({ params }: { params: Promise<
         <p className={styles.recipeTitle}>{editor.recipe.title}</p>
         <h1>Ingredients</h1>
       </header>
+      <RecipeEditNavigation currentStage="ingredients" recipeId={editor.recipe.id} />
       <IngredientEditor data={editor} key={editor.recipe.version} />
     </main>
   );

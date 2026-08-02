@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { MobileNavigation } from "@/components/navigation/MobileNavigation";
 import { SiteHeader } from "@/components/navigation/SiteHeader";
@@ -24,6 +24,13 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: "#315a45",
+};
+
+const themeBootstrap = `(function(){try{var theme=localStorage.getItem("common-table-theme");if(theme==="light"||theme==="dark"){document.documentElement.dataset.theme=theme}}catch(error){}})()`;
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -38,7 +45,10 @@ export default async function RootLayout({
     : null;
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+      </head>
       <body>
         <a className="skip-link" href="#main-content">
           Skip to content

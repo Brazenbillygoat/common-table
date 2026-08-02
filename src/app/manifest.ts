@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "A personal cookbook for finding recipes and planning meals.",
     start_url: "/",
     display: "standalone",
-    background_color: "#f7f4ed",
+    background_color: "#315a45",
     theme_color: "#315a45",
     orientation: "portrait-primary",
     icons: [

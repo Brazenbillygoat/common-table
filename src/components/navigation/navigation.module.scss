@@ -61,6 +61,43 @@
   gap: 0.625rem;
 }
 
+.themeToggle {
+  display: inline-grid;
+  flex: 0 0 2.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  place-items: center;
+  color: var(--color-accent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+}
+
+.themeToggle:hover {
+  background: var(--color-accent-soft);
+}
+
+.themeToggle:disabled {
+  cursor: default;
+}
+
+.themeIcon {
+  display: inline-flex;
+  width: 1.375rem;
+  height: 1.375rem;
+}
+
+.themeIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.themeToggle[data-loading="true"] .themeIcon {
+  visibility: hidden;
+}
+
 .displayName {
   min-width: 0;
   max-width: 8rem;
@@ -68,6 +105,28 @@
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 22rem) {
+  .headerContent,
+  .account {
+    gap: 0.25rem;
+  }
+
+  .displayName {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .signInLink {
+    padding-inline: 0.5rem;
+  }
 }
 
 .mobileNavigation {
