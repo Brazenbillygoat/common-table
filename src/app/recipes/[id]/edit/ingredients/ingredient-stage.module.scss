@@ -234,8 +234,16 @@
 }
 
 .primaryAction,
-.secondaryAction {
+.secondaryAction,
+.dangerAction {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
   font-weight: 800;
+  text-align: center;
+  overflow-wrap: anywhere;
   border-radius: var(--radius-small);
   cursor: pointer;
 }
@@ -252,10 +260,17 @@
   border: 1px solid var(--color-border-strong);
 }
 
+.dangerAction {
+  color: var(--color-error);
+  background: var(--color-error-soft);
+  border: 1px solid var(--color-error);
+}
+
 .primaryAction:disabled,
-.secondaryAction:disabled {
-  cursor: wait;
-  opacity: 0.7;
+.secondaryAction:disabled,
+.dangerAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .ingredientSection {
@@ -289,6 +304,15 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: end;
+}
+
+.sectionActions {
+  justify-content: flex-end;
+}
+
+.groupActions,
+.line > .itemMoveActions {
+  margin-top: 0.5rem;
 }
 
 .sectionActions button,
@@ -365,4 +389,23 @@
   margin-top: 2rem;
   padding-top: 1rem;
   border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 34rem) {
+  .sectionActions,
+  .groupActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .sectionActions button,
+  .groupActions button,
+  .lineActions button,
+  .itemMoveActions button {
+    flex: 1 1 8rem;
+  }
+
+  .deleteConfirmation button {
+    flex: 1 1 100%;
+  }
 }

@@ -443,7 +443,11 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
           {banner === "conflict" ? (
             <>
               <p>Reload the latest version before making another change.</p>
-              <button onClick={() => router.refresh()} type="button">
+              <button
+                className={styles.primaryAction}
+                onClick={() => router.refresh()}
+                type="button"
+              >
                 Reload draft
               </button>
             </>
@@ -557,6 +561,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                         ))}
                     </select>
                     <button
+                      className={styles.dangerAction}
                       disabled={mutationsDisabled}
                       onClick={() =>
                         void structure({
@@ -571,6 +576,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                       Move contents and delete section
                     </button>
                     <button
+                      className={styles.dangerAction}
                       disabled={mutationsDisabled}
                       onClick={() =>
                         void structure({
@@ -586,6 +592,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                   </>
                 ) : (
                   <button
+                    className={styles.dangerAction}
                     disabled={mutationsDisabled}
                     onClick={() =>
                       void structure({
@@ -599,7 +606,11 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                     Delete section
                   </button>
                 )}
-                <button onClick={() => setDeletingSectionId(null)} type="button">
+                <button
+                  className={styles.secondaryAction}
+                  onClick={() => setDeletingSectionId(null)}
+                  type="button"
+                >
                   Cancel
                 </button>
               </div>
@@ -685,6 +696,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                       {editingId === `new-option:${item.id}` ? formForCurrentMode() : null}
                       <div className={styles.groupActions}>
                         <button
+                          className={styles.primaryAction}
                           disabled={mutationsDisabled}
                           onClick={() => openNewOption(item.group)}
                           type="button"
@@ -692,6 +704,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                           Add option
                         </button>
                         <button
+                          className={styles.secondaryAction}
                           disabled={mutationsDisabled}
                           onClick={() => {
                             setRenamingGroupId(item.id);
@@ -702,6 +715,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                           Rename group
                         </button>
                         <button
+                          className={styles.secondaryAction}
                           disabled={mutationsDisabled}
                           onClick={() => void structure({ type: "ungroup", groupId: item.id })}
                           type="button"
@@ -709,6 +723,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                           Ungroup
                         </button>
                         <button
+                          className={styles.dangerAction}
                           disabled={mutationsDisabled}
                           onClick={() => setDeletingGroupId(item.id)}
                           type="button"
@@ -720,6 +735,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                         <div className={styles.deleteConfirmation}>
                           <p>Delete this alternative group and all its options?</p>
                           <button
+                            className={styles.dangerAction}
                             disabled={mutationsDisabled}
                             onClick={() =>
                               void structure({ type: "deleteGroup", groupId: item.id })
@@ -728,7 +744,11 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
                           >
                             Delete group
                           </button>
-                          <button onClick={() => setDeletingGroupId(null)} type="button">
+                          <button
+                            className={styles.secondaryAction}
+                            onClick={() => setDeletingGroupId(null)}
+                            type="button"
+                          >
                             Cancel
                           </button>
                         </div>
@@ -820,7 +840,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
             {editingId === "new" && editingSectionId === section.id ? formForCurrentMode() : null}
             {editingId === null ? (
               <button
-                className={styles.addButton}
+                className={`${styles.addButton} ${styles.primaryAction}`}
                 disabled={mutationsDisabled}
                 onClick={() => openNew(section.id)}
                 type="button"
@@ -845,6 +865,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
             value={renamingSectionId ? "" : sectionName}
           />
           <button
+            className={styles.primaryAction}
             disabled={mutationsDisabled || !sectionName.trim() || Boolean(renamingSectionId)}
             onClick={() =>
               void structure({ type: "addSection", name: sectionName }).then((saved) => {
@@ -895,20 +916,37 @@ function LineActions({
   return (
     <>
       <div className={styles.lineActions}>
-        <button disabled={disabled} onClick={onEdit} ref={editButtonRef} type="button">
+        <button
+          className={styles.secondaryAction}
+          disabled={disabled}
+          onClick={onEdit}
+          ref={editButtonRef}
+          type="button"
+        >
           Edit
         </button>
-        <button disabled={disabled} onClick={() => setDeleteActive(line.id)} type="button">
+        <button
+          className={styles.dangerAction}
+          disabled={disabled}
+          onClick={() => setDeleteActive(line.id)}
+          type="button"
+        >
           Delete
         </button>
         {onAddAlternative ? (
-          <button disabled={disabled} onClick={onAddAlternative} type="button">
+          <button
+            className={styles.primaryAction}
+            disabled={disabled}
+            onClick={onAddAlternative}
+            type="button"
+          >
             Add alternative
           </button>
         ) : null}
         {onMoveLegacy && legacyIndex !== undefined && legacyLength !== undefined ? (
           <>
             <button
+              className={styles.secondaryAction}
               disabled={legacyIndex === 0 || disabled}
               onClick={() => onMoveLegacy(-1)}
               type="button"
@@ -916,6 +954,7 @@ function LineActions({
               Move up
             </button>
             <button
+              className={styles.secondaryAction}
               disabled={legacyIndex === legacyLength - 1 || disabled}
               onClick={() => onMoveLegacy(1)}
               type="button"
@@ -927,6 +966,7 @@ function LineActions({
         {onMoveOption && optionIndex !== undefined && optionCount !== undefined ? (
           <>
             <button
+              className={styles.secondaryAction}
               disabled={optionIndex === 0 || disabled}
               onClick={() => onMoveOption(-1)}
               type="button"
@@ -934,6 +974,7 @@ function LineActions({
               Move option up
             </button>
             <button
+              className={styles.secondaryAction}
               disabled={optionIndex === optionCount - 1 || disabled}
               onClick={() => onMoveOption(1)}
               type="button"
@@ -946,10 +987,19 @@ function LineActions({
       {deleteActive ? (
         <div className={styles.deleteConfirmation}>
           <p>Delete ingredient?</p>
-          <button disabled={disabled} onClick={onDelete} type="button">
+          <button
+            className={styles.dangerAction}
+            disabled={disabled}
+            onClick={onDelete}
+            type="button"
+          >
             Delete
           </button>
-          <button onClick={() => setDeleteActive(null)} type="button">
+          <button
+            className={styles.secondaryAction}
+            onClick={() => setDeleteActive(null)}
+            type="button"
+          >
             Cancel
           </button>
         </div>
@@ -971,10 +1021,16 @@ function ItemMoveActions({
 }) {
   return (
     <div className={styles.itemMoveActions}>
-      <button disabled={index === 0 || disabled} onClick={() => onMove(-1)} type="button">
+      <button
+        className={styles.secondaryAction}
+        disabled={index === 0 || disabled}
+        onClick={() => onMove(-1)}
+        type="button"
+      >
         Move up
       </button>
       <button
+        className={styles.secondaryAction}
         disabled={index === itemCount - 1 || disabled}
         onClick={() => onMove(1)}
         type="button"
@@ -1041,13 +1097,24 @@ function SectionHeader({
     <header className={styles.sectionHeader}>
       <h2>{name ?? "Ingredients"}</h2>
       <div className={styles.sectionActions}>
-        <button disabled={disabled} onClick={onBeginRename} type="button">
+        <button
+          className={styles.secondaryAction}
+          disabled={disabled}
+          onClick={onBeginRename}
+          type="button"
+        >
           Rename section
         </button>
-        <button disabled={disabled || index === 0} onClick={() => onMove(-1)} type="button">
+        <button
+          className={styles.secondaryAction}
+          disabled={disabled || index === 0}
+          onClick={() => onMove(-1)}
+          type="button"
+        >
           Move section up
         </button>
         <button
+          className={styles.secondaryAction}
           disabled={disabled || index === sectionCount - 1}
           onClick={() => onMove(1)}
           type="button"
@@ -1055,6 +1122,7 @@ function SectionHeader({
           Move section down
         </button>
         <button
+          className={styles.dangerAction}
           disabled={disabled || sectionCount <= 1 || deleteActive}
           onClick={onBeginDelete}
           type="button"
@@ -1087,10 +1155,20 @@ function InlineNameForm({
         {label}
         <input maxLength={80} onChange={(event) => setValue(event.target.value)} value={value} />
       </label>
-      <button disabled={pending || !value.trim()} onClick={onSubmit} type="button">
+      <button
+        className={styles.primaryAction}
+        disabled={pending || !value.trim()}
+        onClick={onSubmit}
+        type="button"
+      >
         Save
       </button>
-      <button disabled={pending} onClick={onCancel} type="button">
+      <button
+        className={styles.secondaryAction}
+        disabled={pending}
+        onClick={onCancel}
+        type="button"
+      >
         Cancel
       </button>
     </div>
