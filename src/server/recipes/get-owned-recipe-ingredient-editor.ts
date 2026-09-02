@@ -6,6 +6,7 @@ import { getDatabase } from "@/server/db/client";
 import {
   ingredient,
   recipe,
+  recipeIngredientChoiceGroup,
   recipeIngredient,
   recipeIngredientSection,
   unit,
@@ -27,22 +28,29 @@ export async function getOwnedRecipeIngredientEditor(
     return null;
   }
 
-  const [section] = await database
-    .select({ id: recipeIngredientSection.id })
-    .from(recipeIngredientSection)
-    .where(
-      and(eq(recipeIngredientSection.recipeId, recipeId), eq(recipeIngredientSection.position, 0)),
-    )
-    .limit(1);
-
-  if (!section) {
-    return null;
-  }
-
-  const [lines, ingredientOptions, unitOptions] = await Promise.all([
+  const [sections, choiceGroups, lines, ingredientOptions, unitOptions] = await Promise.all([
+    database
+      .select({
+        id: recipeIngredientSection.id,
+        name: recipeIngredientSection.name,
+        position: recipeIngredientSection.position,
+      })
+      .from(recipeIngredientSection)
+      .where(eq(recipeIngredientSection.recipeId, recipeId))
+      .orderBy(asc(recipeIngredientSection.position)),
+    database
+      .select({
+        id: recipeIngredientChoiceGroup.id,
+        sectionId: recipeIngredientChoiceGroup.sectionId,
+        label: recipeIngredientChoiceGroup.label,
+      })
+      .from(recipeIngredientChoiceGroup)
+      .where(eq(recipeIngredientChoiceGroup.recipeId, recipeId)),
     database
       .select({
         id: recipeIngredient.id,
+        sectionId: recipeIngredient.sectionId,
+        choiceGroupId: recipeIngredient.choiceGroupId,
         position: recipeIngredient.position,
         ingredientId: recipeIngredient.ingredientId,
         canonicalIngredientName: ingredient.name,
@@ -57,12 +65,14 @@ export async function getOwnedRecipeIngredientEditor(
         isOptional: recipeIngredient.isOptional,
       })
       .from(recipeIngredient)
+      .innerJoin(
+        recipeIngredientSection,
+        eq(recipeIngredient.sectionId, recipeIngredientSection.id),
+      )
       .leftJoin(ingredient, eq(recipeIngredient.ingredientId, ingredient.id))
       .leftJoin(unit, eq(recipeIngredient.unitId, unit.id))
-      .where(
-        and(eq(recipeIngredient.recipeId, recipeId), eq(recipeIngredient.sectionId, section.id)),
-      )
-      .orderBy(asc(recipeIngredient.position)),
+      .where(eq(recipeIngredient.recipeId, recipeId))
+      .orderBy(asc(recipeIngredientSection.position), asc(recipeIngredient.position)),
     database
       .select({ id: ingredient.id, name: ingredient.name })
       .from(ingredient)
@@ -75,10 +85,30 @@ export async function getOwnedRecipeIngredientEditor(
       .orderBy(asc(unit.kind), asc(unit.name)),
   ]);
 
+  if (sections.length === 0) {
+    return null;
+  }
+  const sectionPositions = new Map(sections.map((section) => [section.id, section.position]));
+  const groupPositions = new Map<string, number>();
+  for (const line of lines) {
+    if (line.choiceGroupId && !groupPositions.has(line.choiceGroupId)) {
+      groupPositions.set(line.choiceGroupId, line.position);
+    }
+  }
+  choiceGroups.sort(
+    (left, right) =>
+      (sectionPositions.get(left.sectionId) ?? 0) - (sectionPositions.get(right.sectionId) ?? 0) ||
+      (groupPositions.get(left.id) ?? 0) - (groupPositions.get(right.id) ?? 0),
+  );
+
   return {
     recipe: ownedRecipe,
+    sections,
+    choiceGroups,
     lines: lines.map((line) => ({
       id: line.id,
+      sectionId: line.sectionId,
+      choiceGroupId: line.choiceGroupId,
       position: line.position,
       ingredientId: line.ingredientId,
       ingredientName: line.canonicalIngredientName ?? line.customIngredient ?? "",

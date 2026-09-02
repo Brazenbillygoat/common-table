@@ -54,6 +54,57 @@ export function mutationErrorResponse(error: unknown, operation: string) {
         ingredientIds: ["Submit every current ingredient exactly once."],
       });
     }
+    if (error.code === "CONTENT_REFERENCED") {
+      return Response.json(
+        {
+          error: {
+            code: error.code,
+            message:
+              "Reassign or delete the linked instruction blocks before changing this ingredient structure.",
+            linkedSteps: error.details?.linkedSteps ?? [],
+          },
+        },
+        { status: 409 },
+      );
+    }
+    if (error.code === "GROUP_MINIMUM") {
+      return Response.json(
+        {
+          error: {
+            code: error.code,
+            message: "An alternative needs at least two options. Ungroup it or delete the group.",
+          },
+        },
+        { status: 409 },
+      );
+    }
+    if (error.code === "GROUP_OPTION_OPTIONAL") {
+      return validationResponse({
+        isOptional: ["An alternative option cannot also be optional."],
+      });
+    }
+    if (error.code === "SECTION_NOT_FOUND" || error.code === "GROUP_NOT_FOUND") {
+      return Response.json(
+        { error: { code: error.code, message: "This recipe structure is no longer available." } },
+        { status: 404 },
+      );
+    }
+    if (error.code === "DUPLICATE_SECTION") {
+      return validationResponse({ name: ["Section names must be unique."] });
+    }
+    if (error.code === "UNNAMED_SECTION_REQUIRES_NAME") {
+      return validationResponse({
+        name: ["Name the existing ingredient section before adding another section."],
+      });
+    }
+    if (error.code === "LAST_SECTION") {
+      return validationResponse({ sectionId: ["A recipe must keep at least one section."] });
+    }
+    if (error.code === "STRUCTURE_INVALID") {
+      return validationResponse({
+        action: ["Reload the current ingredient structure and try again."],
+      });
+    }
   }
   console.error("Ingredient mutation failed.", {
     operation,

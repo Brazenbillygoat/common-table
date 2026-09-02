@@ -46,6 +46,13 @@
   overflow-wrap: anywhere;
 }
 
+.conditionLabel {
+  margin-block: 0.25rem 0.75rem;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .actions,
 .deleteConfirmation {
   display: flex;
@@ -74,9 +81,11 @@
   font-weight: 800;
 }
 
-.form textarea {
+.form textarea,
+.form select {
   width: 100%;
   min-width: 0;
+  min-height: 44px;
   padding: 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-small);

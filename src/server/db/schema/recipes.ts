@@ -23,6 +23,11 @@ export const recipeStatus = pgEnum("recipe_status", ["draft", "published", "arch
 
 export const taxonomySource = pgEnum("taxonomy_source", ["author", "derived", "admin"]);
 
+export const recipeStepConditionKind = pgEnum("recipe_step_condition_kind", [
+  "choice_option",
+  "optional_ingredient",
+]);
+
 export const recipe = pgTable(
   "recipes",
   {
@@ -122,11 +127,40 @@ export const recipeIngredientSection = pgTable(
       table.recipeId,
       table.position,
     ),
+    uniqueIndex("recipe_ingredient_sections_recipe_name_unique")
+      .on(table.recipeId, sql`lower(btrim(${table.name}))`)
+      .where(sql`${table.name} is not null`),
     check("recipe_ingredient_sections_position_nonnegative", sql`${table.position} >= 0`),
     check(
       "recipe_ingredient_sections_name_valid",
       sql`${table.name} is null or btrim(${table.name}) <> ''`,
     ),
+  ],
+);
+
+export const recipeIngredientChoiceGroup = pgTable(
+  "recipe_ingredient_choice_groups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipe.id, { onDelete: "cascade" }),
+    sectionId: uuid("section_id").notNull(),
+    label: text("label").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "recipe_ingredient_choice_groups_section_recipe_fk",
+      columns: [table.sectionId, table.recipeId],
+      foreignColumns: [recipeIngredientSection.id, recipeIngredientSection.recipeId],
+    }).onDelete("cascade"),
+    unique("recipe_ingredient_choice_groups_id_recipe_section_unique").on(
+      table.id,
+      table.recipeId,
+      table.sectionId,
+    ),
+    index("recipe_ingredient_choice_groups_recipe_id_idx").on(table.recipeId),
+    check("recipe_ingredient_choice_groups_label_not_blank", sql`btrim(${table.label}) <> ''`),
   ],
 );
 
@@ -138,6 +172,7 @@ export const recipeIngredient = pgTable(
       .notNull()
       .references(() => recipe.id, { onDelete: "cascade" }),
     sectionId: uuid("section_id").notNull(),
+    choiceGroupId: uuid("choice_group_id"),
     position: integer("position").notNull(),
     quantityMin: numeric("quantity_min", { precision: 12, scale: 4, mode: "number" }),
     quantityMax: numeric("quantity_max", { precision: 12, scale: 4, mode: "number" }),
@@ -158,10 +193,24 @@ export const recipeIngredient = pgTable(
       columns: [table.sectionId, table.recipeId],
       foreignColumns: [recipeIngredientSection.id, recipeIngredientSection.recipeId],
     }).onDelete("cascade"),
+    foreignKey({
+      name: "recipe_ingredients_choice_group_recipe_section_fk",
+      columns: [table.choiceGroupId, table.recipeId, table.sectionId],
+      foreignColumns: [
+        recipeIngredientChoiceGroup.id,
+        recipeIngredientChoiceGroup.recipeId,
+        recipeIngredientChoiceGroup.sectionId,
+      ],
+    }).onDelete("restrict"),
+    unique("recipe_ingredients_id_recipe_unique").on(table.id, table.recipeId),
     uniqueIndex("recipe_ingredients_section_position_unique").on(table.sectionId, table.position),
     index("recipe_ingredients_recipe_id_idx").on(table.recipeId),
     index("recipe_ingredients_ingredient_id_idx").on(table.ingredientId),
     check("recipe_ingredients_position_nonnegative", sql`${table.position} >= 0`),
+    check(
+      "recipe_ingredients_choice_group_not_optional",
+      sql`${table.choiceGroupId} is null or not ${table.isOptional}`,
+    ),
     // Each line uses either a canonical ingredient or custom text, never both.
     check(
       "recipe_ingredients_exactly_one_ingredient",
@@ -210,11 +259,23 @@ export const recipeStep = pgTable(
       .references(() => recipe.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
     instruction: text("instruction").notNull(),
+    conditionKind: recipeStepConditionKind("condition_kind"),
+    conditionIngredientId: uuid("condition_ingredient_id"),
   },
   (table) => [
+    foreignKey({
+      name: "recipe_steps_condition_ingredient_recipe_fk",
+      columns: [table.conditionIngredientId, table.recipeId],
+      foreignColumns: [recipeIngredient.id, recipeIngredient.recipeId],
+    }).onDelete("restrict"),
     uniqueIndex("recipe_steps_recipe_position_unique").on(table.recipeId, table.position),
+    index("recipe_steps_condition_ingredient_id_idx").on(table.conditionIngredientId),
     check("recipe_steps_position_nonnegative", sql`${table.position} >= 0`),
     check("recipe_steps_instruction_not_blank", sql`btrim(${table.instruction}) <> ''`),
+    check(
+      "recipe_steps_condition_complete",
+      sql`num_nonnulls(${table.conditionKind}, ${table.conditionIngredientId}) in (0, 2)`,
+    ),
   ],
 );
 
@@ -290,6 +351,7 @@ export const recipeRelations = relations(recipe, ({ many, one }) => ({
   }),
   photos: many(recipePhoto),
   ingredientSections: many(recipeIngredientSection),
+  ingredientChoiceGroups: many(recipeIngredientChoiceGroup),
   ingredients: many(recipeIngredient),
   steps: many(recipeStep),
   taxonomyValues: many(recipeTaxonomyValue),
@@ -314,6 +376,22 @@ export const recipeIngredientSectionRelations = relations(
       references: [recipe.id],
     }),
     ingredients: many(recipeIngredient),
+    choiceGroups: many(recipeIngredientChoiceGroup),
+  }),
+);
+
+export const recipeIngredientChoiceGroupRelations = relations(
+  recipeIngredientChoiceGroup,
+  ({ many, one }) => ({
+    recipe: one(recipe, {
+      fields: [recipeIngredientChoiceGroup.recipeId],
+      references: [recipe.id],
+    }),
+    section: one(recipeIngredientSection, {
+      fields: [recipeIngredientChoiceGroup.sectionId],
+      references: [recipeIngredientSection.id],
+    }),
+    options: many(recipeIngredient),
   }),
 );
 
@@ -325,6 +403,10 @@ export const recipeIngredientRelations = relations(recipeIngredient, ({ one }) =
   section: one(recipeIngredientSection, {
     fields: [recipeIngredient.sectionId],
     references: [recipeIngredientSection.id],
+  }),
+  choiceGroup: one(recipeIngredientChoiceGroup, {
+    fields: [recipeIngredient.choiceGroupId],
+    references: [recipeIngredientChoiceGroup.id],
   }),
   ingredient: one(ingredient, {
     fields: [recipeIngredient.ingredientId],
@@ -340,6 +422,10 @@ export const recipeStepRelations = relations(recipeStep, ({ one }) => ({
   recipe: one(recipe, {
     fields: [recipeStep.recipeId],
     references: [recipe.id],
+  }),
+  conditionIngredient: one(recipeIngredient, {
+    fields: [recipeStep.conditionIngredientId],
+    references: [recipeIngredient.id],
   }),
 }));
 

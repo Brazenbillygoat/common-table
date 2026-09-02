@@ -45,6 +45,13 @@ export function mutationErrorResponse(error: unknown, operation: string) {
         stepIds: ["Submit every current step exactly once."],
       });
     }
+    if (error.code === "CONDITION_INVALID") {
+      return validationResponse({
+        conditionIngredientId: [
+          "Choose an alternative option or optional ingredient from this recipe.",
+        ],
+      });
+    }
   }
   console.error("Step mutation failed.", { operation, classification: "unexpected" });
   return Response.json(

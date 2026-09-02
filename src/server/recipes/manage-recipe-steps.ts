@@ -3,10 +3,11 @@ import "server-only";
 import { and, asc, eq, max, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/server/db/client";
-import { recipe, recipeStep } from "@/server/db/schema";
+import { recipe, recipeIngredient, recipeStep } from "@/server/db/schema";
 import type { NormalizedRecipeStep, RecipeStep } from "@/utils/recipe-step";
 
-export type RecipeStepErrorCode = "RECIPE_NOT_FOUND" | "VERSION_CONFLICT" | "STEP_SET_INVALID";
+export type RecipeStepErrorCode =
+  "RECIPE_NOT_FOUND" | "VERSION_CONFLICT" | "STEP_SET_INVALID" | "CONDITION_INVALID";
 
 export class RecipeStepError extends Error {
   constructor(readonly code: RecipeStepErrorCode) {
@@ -45,6 +46,7 @@ export async function createRecipeStep({
 }: WriteArguments) {
   return getDatabase().transaction(async (transaction) => {
     const version = await advanceVersion(transaction, recipeId, actorUserId, expectedVersion);
+    await validateCondition(transaction, recipeId, input);
     const [positionResult] = await transaction
       .select({ maximum: max(recipeStep.position) })
       .from(recipeStep)
@@ -52,11 +54,19 @@ export async function createRecipeStep({
     const position = (positionResult?.maximum ?? -1) + 1;
     const [step] = await transaction
       .insert(recipeStep)
-      .values({ recipeId, position, instruction: input.instruction })
+      .values({
+        recipeId,
+        position,
+        instruction: input.instruction,
+        conditionKind: input.conditionKind ?? null,
+        conditionIngredientId: input.conditionIngredientId ?? null,
+      })
       .returning({
         id: recipeStep.id,
         position: recipeStep.position,
         instruction: recipeStep.instruction,
+        conditionKind: recipeStep.conditionKind,
+        conditionIngredientId: recipeStep.conditionIngredientId,
       });
     if (!step) {
       throw new Error("Step insert did not return a row.");
@@ -74,14 +84,27 @@ export async function updateRecipeStep({
 }: UpdateArguments) {
   return getDatabase().transaction(async (transaction) => {
     const version = await advanceVersion(transaction, recipeId, actorUserId, expectedVersion);
+    await validateCondition(transaction, recipeId, input);
+    const conditionUpdate =
+      input.conditionKind !== undefined || input.conditionIngredientId !== undefined
+        ? {
+            conditionKind: input.conditionKind ?? null,
+            conditionIngredientId: input.conditionIngredientId ?? null,
+          }
+        : {};
     const [step] = await transaction
       .update(recipeStep)
-      .set({ instruction: input.instruction })
+      .set({
+        instruction: input.instruction,
+        ...conditionUpdate,
+      })
       .where(and(eq(recipeStep.id, stepId), eq(recipeStep.recipeId, recipeId)))
       .returning({
         id: recipeStep.id,
         position: recipeStep.position,
         instruction: recipeStep.instruction,
+        conditionKind: recipeStep.conditionKind,
+        conditionIngredientId: recipeStep.conditionIngredientId,
       });
     if (!step) {
       throw new RecipeStepError("RECIPE_NOT_FOUND");
@@ -158,6 +181,38 @@ export async function reorderRecipeSteps({
 }
 
 type Transaction = Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0];
+
+async function validateCondition(
+  transaction: Transaction,
+  recipeId: string,
+  input: NormalizedRecipeStep,
+) {
+  if (!input.conditionKind && !input.conditionIngredientId) return;
+  if (!input.conditionKind || !input.conditionIngredientId) {
+    throw new RecipeStepError("CONDITION_INVALID");
+  }
+  const [candidate] = await transaction
+    .select({
+      choiceGroupId: recipeIngredient.choiceGroupId,
+      isOptional: recipeIngredient.isOptional,
+    })
+    .from(recipeIngredient)
+    .where(
+      and(
+        eq(recipeIngredient.id, input.conditionIngredientId),
+        eq(recipeIngredient.recipeId, recipeId),
+      ),
+    )
+    .limit(1);
+  if (
+    !candidate ||
+    (input.conditionKind === "choice_option" && !candidate.choiceGroupId) ||
+    (input.conditionKind === "optional_ingredient" &&
+      (candidate.choiceGroupId !== null || !candidate.isOptional))
+  ) {
+    throw new RecipeStepError("CONDITION_INVALID");
+  }
+}
 
 async function advanceVersion(
   transaction: Transaction,

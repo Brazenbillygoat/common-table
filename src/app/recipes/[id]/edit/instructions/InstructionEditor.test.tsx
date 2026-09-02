@@ -12,6 +12,7 @@ vi.mock("next/navigation", () => ({
 
 const firstId = "e785b35e-4ff4-421b-9609-58b889461279";
 const secondId = "c62ec57a-7ef4-470c-ae03-10a74b8aabf2";
+const choiceId = "de5797ee-837d-48ea-8367-69ea4033be6f";
 const emptyData: RecipeStepEditorData = {
   recipe: { id: "34053bb6-c957-4d2d-a621-b2e34b774a1d", title: "Chili", version: 1 },
   steps: [],
@@ -126,6 +127,8 @@ describe("InstructionEditor", () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
       expectedVersion: 2,
       instruction: "Serve.",
+      conditionKind: "always",
+      conditionIngredientId: "",
     });
   });
 
@@ -152,7 +155,48 @@ describe("InstructionEditor", () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       expectedVersion: 1,
       instruction: " Simmer gently. ",
+      conditionKind: "always",
+      conditionIngredientId: "",
     });
+  });
+
+  it("authors and visibly labels a conditional instruction", async () => {
+    const conditionalData: RecipeStepEditorData = {
+      ...emptyData,
+      conditionOptions: [{ id: choiceId, kind: "choice_option", label: "Protein: Tofu" }],
+    };
+    const fetchMock = vi.fn().mockImplementation(() =>
+      response(201, {
+        data: {
+          step: {
+            id: firstId,
+            position: 0,
+            instruction: "Cook until crisp.",
+            conditionKind: "choice_option",
+            conditionIngredientId: choiceId,
+          },
+          version: 2,
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<InstructionEditor data={conditionalData} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add step" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Instruction" }), {
+      target: { value: "Cook until crisp." },
+    });
+    fireEvent.change(screen.getByLabelText("Applies when"), {
+      target: { value: `choice_option:${choiceId}` },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add step" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      expectedVersion: 1,
+      instruction: "Cook until crisp.",
+      conditionKind: "choice_option",
+      conditionIngredientId: choiceId,
+    });
+    expect(await screen.findByText("Applies when: Protein: Tofu")).toBeInTheDocument();
   });
 
   it("supports edit cancel, multiline plain text, and inline delete cancel", async () => {

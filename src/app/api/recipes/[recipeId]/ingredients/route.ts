@@ -4,7 +4,7 @@ import { getCurrentSession } from "@/server/auth/session";
 import { createRecipeIngredientLine } from "@/server/recipes/manage-recipe-ingredients";
 import {
   normalizeRecipeIngredient,
-  recipeIngredientRequestSchema,
+  recipeIngredientCreateRequestSchema,
 } from "@/utils/recipe-ingredient";
 
 import { authResponse, mutationErrorResponse, validationResponse } from "./responses";
@@ -24,7 +24,7 @@ export async function POST(
   } catch {
     return validationResponse({});
   }
-  const validation = recipeIngredientRequestSchema.safeParse(body);
+  const validation = recipeIngredientCreateRequestSchema.safeParse(body);
   if (!validation.success) {
     return validationResponse(validation.error.flatten().fieldErrors);
   }
@@ -39,6 +39,7 @@ export async function POST(
       actorUserId: session.user.id,
       recipeId,
       expectedVersion: validation.data.expectedVersion,
+      sectionId: validation.data.sectionId,
       input: normalizeRecipeIngredient(validation.data),
     });
     return Response.json({ data: result }, { status: 201 });

@@ -1,6 +1,6 @@
 # Common Table project context
 
-Last reviewed against the repository: 2026-08-29
+Last reviewed against the repository: 2026-09-02
 
 ## Product
 
@@ -26,7 +26,15 @@ The repository currently provides:
 - Owner-scoped draft creation and a My recipes workspace.
 - Structured ingredient and instruction editors with validation, ordered
   content, optimistic concurrency, transactional mutations, and failure-state
-  preservation.
+  preservation. Ingredient authoring supports named sections, labeled
+  choose-one groups, independent optional lines, and whole-group movement.
+- Instruction blocks can apply always, to one choose-one option, or to one
+  optional ingredient. Referenced ingredient structures cannot be deleted or
+  ungrouped until their linked instructions are reassigned or removed.
+- An owner-only draft preview resolves ingredient choices and conditional
+  instructions from validated URL parameters without persisting cooking state.
+  Undecided, inactive, and active branches remain explicit, and active steps
+  receive one contiguous numbering sequence.
 - Canonical and recipe-owned custom ingredients and units, including numeric,
   ranged, free-form, and omitted quantities.
 - Vitest, Testing Library, ESLint, Prettier, TypeScript, build, and opt-in
@@ -55,9 +63,12 @@ authoritative.
 The relational model includes Better Auth accounts and sessions;
 administrator-managed ingredients, units, and taxonomy values; owner-scoped
 recipes with ordered photos, ingredient sections, ingredients, steps, and
-taxonomy associations; and private meal plans, slots, entries, and generation
-runs. Canonical values and recipe-owned custom values are intentionally
-distinct. Computed values must be reproducible from durable inputs.
+taxonomy associations; recipe-owned ingredient choice groups; optional
+single-ingredient step conditions; and private meal plans, slots, entries, and
+generation runs. Composite relationships prevent cross-recipe and
+cross-section alternative references. Canonical values and recipe-owned custom
+values are intentionally distinct. Computed values must be reproducible from
+durable inputs.
 
 PostgreSQL full-text search, `pg_trgm`, and `unaccent` are the planned MVP search
 foundation. Search state belongs in URL parameters and ranking must remain
@@ -78,11 +89,11 @@ deterministic.
 
 ## Verification baseline
 
-The most recent full documented application verification was 2026-08-02:
-formatting, lint, TypeScript, 153 tests across 26 files, the Next.js production
-build, and `git diff --check` passed. Database checks were not required by that
-theme and ingredient-form slice. Hyrum has since completed its browser review.
-This documentation cleanup did not rerun application tests.
+The most recent full automated application verification was 2026-09-02:
+formatting, lint, TypeScript, 175 tests across 33 files with PostgreSQL
+integration enabled, the Next.js production build, migration application twice,
+idempotent seed, schema-drift generation, and `git diff --check` passed. Owner
+browser and visual acceptance remains separate.
 
 ## Documentation roles
 

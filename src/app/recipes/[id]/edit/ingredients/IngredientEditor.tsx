@@ -1,78 +1,83 @@
 "use client";
 
-import { type FormEvent, type MouseEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
+  formatRecipeIngredientLine,
+  type RecipeIngredientChoiceGroup,
   type RecipeIngredientEditorData,
   type RecipeIngredientLine,
-  type RecipeIngredientRequest,
+  type RecipeIngredientSection,
+  type RecipeIngredientStructureAction,
+  recipeIngredientInputSchema,
   recipeIngredientRequestSchema,
 } from "@/utils/recipe-ingredient";
 
-import { IngredientPicker } from "./IngredientPicker";
+import {
+  emptyIngredientForm,
+  IngredientForm,
+  ingredientFieldIds,
+  ingredientFormFromLine,
+  type IngredientFormValues,
+} from "./IngredientForm";
 import styles from "./ingredient-stage.module.scss";
 
-type FormValues = Omit<RecipeIngredientRequest, "expectedVersion">;
 type Banner = "none" | "auth" | "conflict" | "failure";
+type EditingMode = string | "new" | `create-group:${string}` | `new-option:${string}` | null;
+type LinkedStep = { id: string; position: number; instruction: string };
+type SectionItem =
+  | { type: "ingredient"; id: string; lines: RecipeIngredientLine[] }
+  | {
+      type: "group";
+      id: string;
+      lines: RecipeIngredientLine[];
+      group: RecipeIngredientChoiceGroup;
+    };
 
-const emptyForm: FormValues = {
-  ingredientSource: "canonical",
-  ingredientId: "",
-  customIngredient: "",
-  quantityMode: "none",
-  quantityMin: "",
-  quantityMax: "",
-  quantityText: "",
-  unitSource: "none",
-  unitId: "",
-  customUnit: "",
-  preparationNote: "",
-  isOptional: false,
-};
-
-const fieldIds: Record<keyof FormValues, string> = {
-  ingredientSource: "ingredient-source",
-  ingredientId: "ingredient-id",
-  customIngredient: "custom-ingredient",
-  quantityMode: "quantity-mode",
-  quantityMin: "quantity-min",
-  quantityMax: "quantity-max",
-  quantityText: "quantity-text",
-  unitSource: "unit-source",
-  unitId: "unit-id",
-  customUnit: "custom-unit",
-  preparationNote: "preparation-note",
-  isOptional: "ingredient-optional",
-};
+const legacySectionId = "legacy-section";
 
 export function IngredientEditor({ data }: { data: RecipeIngredientEditorData }) {
   const router = useRouter();
+  const structured = data.sections !== undefined;
+  const sections: RecipeIngredientSection[] = data.sections ?? [
+    { id: legacySectionId, name: null, position: 0 },
+  ];
+  const groups = data.choiceGroups ?? [];
   const [lines, setLines] = useState(data.lines);
-  // Keep the last server-confirmed version so stale edits can be rejected.
   const [version, setVersion] = useState(data.recipe.version);
-  const [editingId, setEditingId] = useState<string | "new" | null>(null);
-  const [form, setForm] = useState<FormValues>(emptyForm);
+  const [editingId, setEditingId] = useState<EditingMode>(null);
+  const [editingSectionId, setEditingSectionId] = useState(sections[0]?.id ?? legacySectionId);
+  const [form, setForm] = useState<IngredientFormValues>(emptyIngredientForm);
   const [ingredientQuery, setIngredientQuery] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [pending, setPending] = useState(false);
   const [banner, setBanner] = useState<Banner>("none");
   const [status, setStatus] = useState("Draft saved");
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  // The ref updates immediately and blocks a second submit before React renders the pending state.
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+  const [deletingSectionId, setDeletingSectionId] = useState<string | null>(null);
+  const [sectionDispositionTarget, setSectionDispositionTarget] = useState("");
+  const [sectionName, setSectionName] = useState("");
+  const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null);
+  const [groupLabel, setGroupLabel] = useState("");
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<{ message: string; linkedSteps: LinkedStep[] } | null>(
+    null,
+  );
   const mutationLock = useRef(false);
   const bannerRef = useRef<HTMLDivElement>(null);
   const editButtons = useRef(new Map<string, HTMLButtonElement>());
+  const mutationsDisabled = pending || banner === "conflict";
 
   useEffect(() => {
     if (editingId !== null) {
-      // Wait until the conditional form is in the DOM before moving focus into it.
       queueMicrotask(() => {
         document
           .getElementById(
             form.ingredientSource === "canonical"
-              ? fieldIds.ingredientId
-              : fieldIds.customIngredient,
+              ? ingredientFieldIds.ingredientId
+              : ingredientFieldIds.customIngredient,
           )
           ?.focus();
       });
@@ -80,43 +85,68 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
   }, [editingId, form.ingredientSource]);
 
   useEffect(() => {
-    if (banner !== "none") {
-      bannerRef.current?.focus();
-    }
+    if (banner !== "none") bannerRef.current?.focus();
   }, [banner]);
 
-  function openNew() {
-    setForm(emptyForm);
+  function resetForm() {
+    setEditingId(null);
+    setForm(emptyIngredientForm);
     setIngredientQuery("");
     setFieldErrors({});
+    setGroupLabel("");
+  }
+
+  function openNew(sectionId = sections[0]?.id ?? legacySectionId) {
+    resetForm();
+    setEditingSectionId(sectionId);
     setBanner("none");
+    setBlocked(null);
+    setDeletingId(null);
     setEditingId("new");
   }
 
   function openEdit(line: RecipeIngredientLine) {
-    setForm(formFromLine(line));
+    setForm(ingredientFormFromLine(line));
     setIngredientQuery(line.ingredientId ? line.ingredientName : "");
     setFieldErrors({});
     setBanner("none");
+    setBlocked(null);
     setDeletingId(null);
+    setEditingSectionId(line.sectionId ?? sections[0]?.id ?? legacySectionId);
     setEditingId(line.id);
+  }
+
+  function openCreateGroup(line: RecipeIngredientLine) {
+    setForm({ ...emptyIngredientForm, isOptional: false });
+    setIngredientQuery("");
+    setFieldErrors({});
+    setGroupLabel("");
+    setEditingSectionId(line.sectionId ?? sections[0]?.id ?? legacySectionId);
+    setEditingId(`create-group:${line.id}`);
+  }
+
+  function openNewOption(group: RecipeIngredientChoiceGroup) {
+    setForm({ ...emptyIngredientForm, isOptional: false });
+    setIngredientQuery("");
+    setFieldErrors({});
+    setEditingSectionId(group.sectionId);
+    setEditingId(`new-option:${group.id}`);
   }
 
   function cancelEdit() {
     const previousId = editingId;
-    setEditingId(null);
-    setFieldErrors({});
-    setForm(emptyForm);
-    setIngredientQuery("");
-    if (previousId && previousId !== "new") {
+    resetForm();
+    if (previousId && !previousId.includes(":") && previousId !== "new") {
       queueMicrotask(() => editButtons.current.get(previousId)?.focus());
     }
   }
 
-  function updateField<Key extends keyof FormValues>(key: Key, value: FormValues[Key]) {
+  function updateField<Key extends keyof IngredientFormValues>(
+    key: Key,
+    value: IngredientFormValues[Key],
+  ) {
     setForm((current) => {
       const next = { ...current, [key]: value };
-      // Clear fields hidden by the new mode so stale values cannot be submitted.
       if (key === "quantityMode") {
         if (value === "none") {
           next.quantityMin = "";
@@ -125,9 +155,8 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
         } else if (value === "single") {
           next.quantityMax = "";
           next.quantityText = "";
-        } else if (value === "range") {
-          next.quantityText = "";
-        } else if (value === "text") {
+        } else if (value === "range") next.quantityText = "";
+        else if (value === "text") {
           next.quantityMin = "";
           next.quantityMax = "";
           next.unitSource = "none";
@@ -149,7 +178,7 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (mutationLock.current || pending || banner === "conflict") return;
+    if (mutationLock.current || pending || banner === "conflict" || editingId === null) return;
     const validation = recipeIngredientRequestSchema.safeParse({
       ...form,
       expectedVersion: version,
@@ -158,24 +187,65 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
       setFieldErrors(validation.error.flatten().fieldErrors as Record<string, string[]>);
       return;
     }
+    const option = recipeIngredientInputSchema.parse(validation.data);
+
+    if (editingId.startsWith("create-group:")) {
+      if (!groupLabel.trim()) {
+        setFieldErrors({ groupLabel: ["Enter an alternative label."] });
+        return;
+      }
+      const ingredientId = editingId.slice("create-group:".length);
+      if (
+        await structure({
+          type: "createGroup",
+          ingredientId,
+          label: groupLabel,
+          option: { ...option, isOptional: false },
+        })
+      ) {
+        resetForm();
+      }
+      return;
+    }
+    if (editingId.startsWith("new-option:")) {
+      const groupId = editingId.slice("new-option:".length);
+      if (
+        await structure({
+          type: "addGroupOption",
+          groupId,
+          option: { ...option, isOptional: false },
+        })
+      ) {
+        resetForm();
+      }
+      return;
+    }
+
     const isNew = editingId === "new";
     const endpoint = isNew
       ? `/api/recipes/${data.recipe.id}/ingredients`
       : `/api/recipes/${data.recipe.id}/ingredients/${editingId}`;
-    const result = await mutate(endpoint, isNew ? "POST" : "PATCH", validation.data);
+    const body =
+      isNew && structured ? { ...validation.data, sectionId: editingSectionId } : validation.data;
+    const result = await mutate(endpoint, isNew ? "POST" : "PATCH", body);
     if (!result) return;
-
-    // Update the list only after the server confirms that the transaction succeeded.
-    const line = result.line as RecipeIngredientLine;
+    const returned = result.line as RecipeIngredientLine;
+    const line = {
+      ...returned,
+      sectionId: returned.sectionId ?? editingSectionId,
+      choiceGroupId:
+        returned.choiceGroupId ??
+        (isNew
+          ? null
+          : (lines.find((current) => current.id === returned.id)?.choiceGroupId ?? null)),
+    };
     setVersion(result.version as number);
     setLines((current) =>
       isNew
         ? [...current, line]
         : current.map((existing) => (existing.id === line.id ? line : existing)),
     );
-    setEditingId(null);
-    setForm(emptyForm);
-    setIngredientQuery("");
+    resetForm();
     setStatus("Ingredient saved.");
   }
 
@@ -185,17 +255,20 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
     });
     if (!result) return;
     setVersion(result.version as number);
+    const ids = result.ingredientIds as string[];
+    const deletedId = result.deletedIngredientId as string;
     setLines((current) =>
-      (result.ingredientIds as string[]).map((remainingId, position) => ({
-        ...current.find((line) => line.id === remainingId)!,
-        position,
-      })),
+      current
+        .filter((line) => line.id !== deletedId)
+        .map((line) =>
+          ids.includes(line.id) ? { ...line, position: ids.indexOf(line.id) } : line,
+        ),
     );
     setDeletingId(null);
     setStatus("Ingredient saved.");
   }
 
-  async function move(index: number, direction: -1 | 1) {
+  async function moveLegacy(index: number, direction: -1 | 1) {
     const reordered = [...lines];
     const target = index + direction;
     [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
@@ -209,12 +282,26 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
     setStatus("Ingredient saved.");
   }
 
+  async function structure(action: RecipeIngredientStructureAction) {
+    if (banner === "conflict") return false;
+    const result = await mutate(`/api/recipes/${data.recipe.id}/ingredients/structure`, "PUT", {
+      expectedVersion: version,
+      action,
+    });
+    if (!result) return false;
+    setVersion(result.version as number);
+    setStatus("Ingredient structure saved.");
+    router.refresh();
+    return true;
+  }
+
   async function mutate(endpoint: string, method: string, body: unknown) {
-    if (mutationLock.current) return null;
+    if (mutationLock.current || banner === "conflict") return null;
     mutationLock.current = true;
     setPending(true);
     setStatus("Saving ingredient…");
     setBanner("none");
+    setBlocked(null);
     setFieldErrors({});
     try {
       const response = await fetch(endpoint, {
@@ -224,18 +311,25 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
       });
       const payload = (await response.json()) as {
         data?: Record<string, unknown>;
-        error?: { code?: string; fieldErrors?: Record<string, string[]> };
+        error?: {
+          code?: string;
+          message?: string;
+          fieldErrors?: Record<string, string[]>;
+          linkedSteps?: LinkedStep[];
+        };
       };
       if (response.ok && payload.data) return payload.data;
-      if (response.status === 400 && payload.error?.fieldErrors && editingId !== null) {
+      if (response.status === 400 && payload.error?.fieldErrors) {
         setFieldErrors(payload.error.fieldErrors);
-      } else if (response.status === 401) {
-        setBanner("auth");
-      } else if (response.status === 409) {
+      } else if (response.status === 401) setBanner("auth");
+      else if (response.status === 409 && payload.error?.code === "VERSION_CONFLICT") {
         setBanner("conflict");
-      } else {
-        setBanner("failure");
-      }
+      } else if (response.status === 409 && payload.error?.message) {
+        setBlocked({
+          message: payload.error.message,
+          linkedSteps: payload.error.linkedSteps ?? [],
+        });
+      } else setBanner("failure");
       setStatus("Changes not saved.");
       return null;
     } catch {
@@ -248,9 +342,89 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
     }
   }
 
-  const validationEntries = Object.entries(fieldErrors).flatMap(([field, messages]) =>
-    messages.map((message) => ({ field: field as keyof FormValues, message })),
-  );
+  function sectionLines(sectionId: string) {
+    return lines
+      .filter((line) => (line.sectionId ?? sections[0]?.id ?? legacySectionId) === sectionId)
+      .sort((left, right) => left.position - right.position);
+  }
+
+  function itemsForSection(sectionId: string): SectionItem[] {
+    const items: SectionItem[] = [];
+    for (const line of sectionLines(sectionId)) {
+      if (!line.choiceGroupId) {
+        items.push({ type: "ingredient", id: line.id, lines: [line] });
+        continue;
+      }
+      const prior = items.at(-1);
+      if (prior?.type === "group" && prior.id === line.choiceGroupId) {
+        prior.lines.push(line);
+        continue;
+      }
+      const group = groups.find((candidate) => candidate.id === line.choiceGroupId);
+      if (group) items.push({ type: "group", id: group.id, lines: [line], group });
+    }
+    return items;
+  }
+
+  function formForCurrentMode() {
+    if (editingId === null) return null;
+    const alternative = editingId.startsWith("create-group:");
+    const option = editingId.startsWith("new-option:");
+    return (
+      <>
+        {alternative ? (
+          <div className={styles.groupLabelField}>
+            <label htmlFor="choice-group-label">Alternative label</label>
+            <input
+              aria-describedby={fieldErrors.groupLabel ? "choice-group-label-error" : undefined}
+              aria-invalid={Boolean(fieldErrors.groupLabel)}
+              id="choice-group-label"
+              maxLength={80}
+              onChange={(event) => setGroupLabel(event.target.value)}
+              value={groupLabel}
+            />
+            {fieldErrors.groupLabel?.[0] ? (
+              <p className={styles.error} id="choice-group-label-error">
+                {fieldErrors.groupLabel[0]}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <IngredientForm
+          cancel={cancelEdit}
+          data={data}
+          fieldErrors={
+            Object.fromEntries(
+              Object.entries(fieldErrors).filter(([field]) => field !== "groupLabel"),
+            ) as Record<string, string[]>
+          }
+          form={form}
+          ingredientQuery={ingredientQuery}
+          optionalDisabled={alternative || option || Boolean(currentEditedLine()?.choiceGroupId)}
+          pending={pending}
+          mutationDisabled={banner === "conflict"}
+          setIngredientQuery={setIngredientQuery}
+          submit={submit}
+          submitLabel={
+            alternative
+              ? "Create alternative"
+              : option
+                ? "Add option"
+                : editingId === "new"
+                  ? "Add ingredient"
+                  : "Save changes"
+          }
+          updateField={updateField}
+        />
+      </>
+    );
+  }
+
+  function currentEditedLine() {
+    return editingId && !editingId.includes(":") && editingId !== "new"
+      ? lines.find((line) => line.id === editingId)
+      : undefined;
+  }
 
   return (
     <section aria-busy={pending}>
@@ -277,6 +451,25 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
           {banner === "failure" ? <p>Your work is still here. Try again.</p> : null}
         </div>
       ) : null}
+      {blocked ? (
+        <div className={styles.blockedHelp} role="alert">
+          <p>{blocked.message}</p>
+          {blocked.linkedSteps.length > 0 ? (
+            <ul>
+              {blocked.linkedSteps.map((step) => (
+                <li key={step.id}>
+                  Step {step.position + 1}: {step.instruction}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      {(fieldErrors.name ?? fieldErrors.action ?? fieldErrors.sectionId)?.[0] ? (
+        <div className={styles.blockedHelp} role="alert">
+          {(fieldErrors.name ?? fieldErrors.action ?? fieldErrors.sectionId)?.[0]}
+        </div>
+      ) : null}
 
       {lines.length === 0 && editingId === null ? (
         <div className={styles.emptyState}>
@@ -285,453 +478,621 @@ export function IngredientEditor({ data }: { data: RecipeIngredientEditorData })
         </div>
       ) : null}
 
-      {lines.length > 0 ? (
-        <ul className={styles.lineList}>
-          {lines.map((line, index) => (
-            <li className={styles.line} key={line.id}>
-              <p className={styles.lineText}>{formatLine(line)}</p>
-              {editingId === line.id ? (
-                <IngredientForm
-                  data={data}
-                  fieldErrors={fieldErrors}
-                  form={form}
-                  ingredientQuery={ingredientQuery}
-                  pending={pending}
-                  submit={submit}
-                  setIngredientQuery={setIngredientQuery}
-                  updateField={updateField}
-                  validationEntries={validationEntries}
-                  cancel={cancelEdit}
-                  submitLabel="Save changes"
-                />
-              ) : (
-                <>
-                  <div className={styles.lineActions}>
+      {sections.map((section, sectionIndex) => {
+        const items = itemsForSection(section.id);
+        return (
+          <section className={structured ? styles.ingredientSection : undefined} key={section.id}>
+            {structured ? (
+              <SectionHeader
+                deleteActive={deletingSectionId === section.id}
+                disabled={mutationsDisabled}
+                index={sectionIndex}
+                name={section.name}
+                onBeginDelete={() => {
+                  setDeletingSectionId(section.id);
+                  setSectionDispositionTarget(
+                    sections.find((candidate) => candidate.id !== section.id)?.id ?? "",
+                  );
+                }}
+                onBeginRename={() => {
+                  setRenamingSectionId(section.id);
+                  setSectionName(section.name ?? "");
+                }}
+                onMove={(direction) => {
+                  const reordered = [...sections];
+                  const target = sectionIndex + direction;
+                  [reordered[sectionIndex], reordered[target]] = [
+                    reordered[target],
+                    reordered[sectionIndex],
+                  ];
+                  void structure({
+                    type: "reorderSections",
+                    sectionIds: reordered.map((candidate) => candidate.id),
+                  });
+                }}
+                sectionCount={sections.length}
+              />
+            ) : null}
+            {renamingSectionId === section.id ? (
+              <InlineNameForm
+                label="Section name"
+                onCancel={() => {
+                  setRenamingSectionId(null);
+                  setSectionName("");
+                }}
+                onSubmit={() => {
+                  void structure({
+                    type: "renameSection",
+                    sectionId: section.id,
+                    name: sectionName,
+                  }).then((saved) => {
+                    if (saved) {
+                      setRenamingSectionId(null);
+                      setSectionName("");
+                    }
+                  });
+                }}
+                pending={pending}
+                setValue={setSectionName}
+                value={sectionName}
+              />
+            ) : null}
+            {deletingSectionId === section.id ? (
+              <div className={styles.deleteConfirmation}>
+                <p>Delete this section?</p>
+                {sectionLines(section.id).length > 0 ? (
+                  <>
+                    <label htmlFor={`move-section-${section.id}`}>Move its contents to</label>
+                    <select
+                      id={`move-section-${section.id}`}
+                      onChange={(event) => setSectionDispositionTarget(event.target.value)}
+                      value={sectionDispositionTarget}
+                    >
+                      {sections
+                        .filter((candidate) => candidate.id !== section.id)
+                        .map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {candidate.name ?? "Unnamed section"}
+                          </option>
+                        ))}
+                    </select>
                     <button
-                      disabled={pending || banner === "conflict"}
-                      onClick={() => openEdit(line)}
-                      ref={(element) => {
-                        if (element) editButtons.current.set(line.id, element);
-                      }}
+                      disabled={mutationsDisabled}
+                      onClick={() =>
+                        void structure({
+                          type: "deleteSection",
+                          sectionId: section.id,
+                          disposition: "move",
+                          targetSectionId: sectionDispositionTarget,
+                        })
+                      }
                       type="button"
                     >
-                      Edit
+                      Move contents and delete section
                     </button>
                     <button
-                      disabled={pending || banner === "conflict"}
-                      onClick={() => setDeletingId(line.id)}
+                      disabled={mutationsDisabled}
+                      onClick={() =>
+                        void structure({
+                          type: "deleteSection",
+                          sectionId: section.id,
+                          disposition: "delete",
+                        })
+                      }
                       type="button"
                     >
-                      Delete
+                      Delete section and contents
                     </button>
-                    <button
-                      disabled={index === 0 || pending || banner === "conflict"}
-                      onClick={() => void move(index, -1)}
-                      type="button"
-                    >
-                      Move up
-                    </button>
-                    <button
-                      disabled={index === lines.length - 1 || pending || banner === "conflict"}
-                      onClick={() => void move(index, 1)}
-                      type="button"
-                    >
-                      Move down
-                    </button>
-                  </div>
-                  {deletingId === line.id ? (
-                    <div className={styles.deleteConfirmation}>
-                      <p>Delete ingredient?</p>
-                      <button
-                        disabled={pending}
-                        onClick={() => void deleteLine(line.id)}
-                        type="button"
-                      >
-                        Delete
-                      </button>
-                      <button onClick={() => setDeletingId(null)} type="button">
-                        Cancel
-                      </button>
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+                  </>
+                ) : (
+                  <button
+                    disabled={mutationsDisabled}
+                    onClick={() =>
+                      void structure({
+                        type: "deleteSection",
+                        sectionId: section.id,
+                        disposition: "delete",
+                      })
+                    }
+                    type="button"
+                  >
+                    Delete section
+                  </button>
+                )}
+                <button onClick={() => setDeletingSectionId(null)} type="button">
+                  Cancel
+                </button>
+              </div>
+            ) : null}
+            {items.length > 0 ? (
+              <ul className={styles.lineList}>
+                {items.map((item, itemIndex) =>
+                  item.type === "group" ? (
+                    <li className={styles.choiceGroup} key={item.id}>
+                      <div className={styles.groupHeading}>
+                        <p>
+                          <strong>{item.group.label}</strong> <span>Choose one</span>
+                        </p>
+                        <ItemMoveActions
+                          disabled={mutationsDisabled}
+                          index={itemIndex}
+                          itemCount={items.length}
+                          onMove={(direction) =>
+                            void structure({
+                              type: "moveItem",
+                              itemType: "group",
+                              itemId: item.id,
+                              targetSectionId: section.id,
+                              targetIndex: itemIndex + direction,
+                            })
+                          }
+                        />
+                      </div>
+                      {renamingGroupId === item.id ? (
+                        <InlineNameForm
+                          label="Alternative label"
+                          onCancel={() => setRenamingGroupId(null)}
+                          onSubmit={() => {
+                            void structure({
+                              type: "renameGroup",
+                              groupId: item.id,
+                              label: groupLabel,
+                            }).then((saved) => saved && setRenamingGroupId(null));
+                          }}
+                          pending={pending}
+                          setValue={setGroupLabel}
+                          value={groupLabel}
+                        />
+                      ) : null}
+                      <ul className={styles.optionList}>
+                        {item.lines.map((line, optionIndex) => (
+                          <li className={styles.line} key={line.id}>
+                            <p className={styles.lineText}>{formatRecipeIngredientLine(line)}</p>
+                            {editingId === line.id ? (
+                              formForCurrentMode()
+                            ) : (
+                              <LineActions
+                                deleteActive={deletingId === line.id}
+                                disabled={mutationsDisabled}
+                                editButtonRef={(element) => {
+                                  if (element) editButtons.current.set(line.id, element);
+                                  else editButtons.current.delete(line.id);
+                                }}
+                                line={line}
+                                onDelete={() => void deleteLine(line.id)}
+                                onEdit={() => openEdit(line)}
+                                onMoveOption={(direction) => {
+                                  const reordered = [...item.lines];
+                                  const target = optionIndex + direction;
+                                  [reordered[optionIndex], reordered[target]] = [
+                                    reordered[target],
+                                    reordered[optionIndex],
+                                  ];
+                                  void structure({
+                                    type: "reorderGroupOptions",
+                                    groupId: item.id,
+                                    optionIds: reordered.map((optionLine) => optionLine.id),
+                                  });
+                                }}
+                                optionIndex={optionIndex}
+                                optionCount={item.lines.length}
+                                setDeleteActive={setDeletingId}
+                              />
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      {editingId === `new-option:${item.id}` ? formForCurrentMode() : null}
+                      <div className={styles.groupActions}>
+                        <button
+                          disabled={mutationsDisabled}
+                          onClick={() => openNewOption(item.group)}
+                          type="button"
+                        >
+                          Add option
+                        </button>
+                        <button
+                          disabled={mutationsDisabled}
+                          onClick={() => {
+                            setRenamingGroupId(item.id);
+                            setGroupLabel(item.group.label);
+                          }}
+                          type="button"
+                        >
+                          Rename group
+                        </button>
+                        <button
+                          disabled={mutationsDisabled}
+                          onClick={() => void structure({ type: "ungroup", groupId: item.id })}
+                          type="button"
+                        >
+                          Ungroup
+                        </button>
+                        <button
+                          disabled={mutationsDisabled}
+                          onClick={() => setDeletingGroupId(item.id)}
+                          type="button"
+                        >
+                          Delete group
+                        </button>
+                      </div>
+                      {deletingGroupId === item.id ? (
+                        <div className={styles.deleteConfirmation}>
+                          <p>Delete this alternative group and all its options?</p>
+                          <button
+                            disabled={mutationsDisabled}
+                            onClick={() =>
+                              void structure({ type: "deleteGroup", groupId: item.id })
+                            }
+                            type="button"
+                          >
+                            Delete group
+                          </button>
+                          <button onClick={() => setDeletingGroupId(null)} type="button">
+                            Cancel
+                          </button>
+                        </div>
+                      ) : null}
+                      {structured && sections.length > 1 ? (
+                        <MoveToSection
+                          itemLabel={item.group.label}
+                          disabled={mutationsDisabled}
+                          onMove={(targetSectionId) =>
+                            void structure({
+                              type: "moveItem",
+                              itemType: "group",
+                              itemId: item.id,
+                              targetSectionId,
+                              targetIndex: itemsForSection(targetSectionId).length,
+                            })
+                          }
+                          sectionId={section.id}
+                          sections={sections}
+                        />
+                      ) : null}
+                    </li>
+                  ) : (
+                    <li className={styles.line} key={item.id}>
+                      <p className={styles.lineText}>{formatRecipeIngredientLine(item.lines[0])}</p>
+                      {editingId === item.id ? (
+                        formForCurrentMode()
+                      ) : (
+                        <>
+                          <LineActions
+                            deleteActive={deletingId === item.id}
+                            disabled={mutationsDisabled}
+                            editButtonRef={(element) => {
+                              if (element) editButtons.current.set(item.id, element);
+                              else editButtons.current.delete(item.id);
+                            }}
+                            legacyIndex={structured ? undefined : itemIndex}
+                            legacyLength={structured ? undefined : items.length}
+                            line={item.lines[0]}
+                            onAddAlternative={
+                              structured ? () => openCreateGroup(item.lines[0]) : undefined
+                            }
+                            onDelete={() => void deleteLine(item.id)}
+                            onEdit={() => openEdit(item.lines[0])}
+                            onMoveLegacy={(direction) => void moveLegacy(itemIndex, direction)}
+                            setDeleteActive={setDeletingId}
+                          />
+                          {structured ? (
+                            <ItemMoveActions
+                              disabled={mutationsDisabled}
+                              index={itemIndex}
+                              itemCount={items.length}
+                              onMove={(direction) =>
+                                void structure({
+                                  type: "moveItem",
+                                  itemType: "ingredient",
+                                  itemId: item.id,
+                                  targetSectionId: section.id,
+                                  targetIndex: itemIndex + direction,
+                                })
+                              }
+                            />
+                          ) : null}
+                          {structured && sections.length > 1 ? (
+                            <MoveToSection
+                              itemLabel={item.lines[0].ingredientName}
+                              disabled={mutationsDisabled}
+                              onMove={(targetSectionId) =>
+                                void structure({
+                                  type: "moveItem",
+                                  itemType: "ingredient",
+                                  itemId: item.id,
+                                  targetSectionId,
+                                  targetIndex: itemsForSection(targetSectionId).length,
+                                })
+                              }
+                              sectionId={section.id}
+                              sections={sections}
+                            />
+                          ) : null}
+                        </>
+                      )}
+                      {editingId === `create-group:${item.id}` ? formForCurrentMode() : null}
+                    </li>
+                  ),
+                )}
+              </ul>
+            ) : null}
+            {editingId === "new" && editingSectionId === section.id ? formForCurrentMode() : null}
+            {editingId === null ? (
+              <button
+                className={styles.addButton}
+                disabled={mutationsDisabled}
+                onClick={() => openNew(section.id)}
+                type="button"
+              >
+                {structured && sections.length > 1
+                  ? `Add ingredient to ${section.name ?? "section"}`
+                  : "Add ingredient"}
+              </button>
+            ) : null}
+          </section>
+        );
+      })}
 
-      {editingId === "new" ? (
-        <IngredientForm
-          data={data}
-          fieldErrors={fieldErrors}
-          form={form}
-          ingredientQuery={ingredientQuery}
-          pending={pending}
-          submit={submit}
-          setIngredientQuery={setIngredientQuery}
-          updateField={updateField}
-          validationEntries={validationEntries}
-          cancel={cancelEdit}
-          submitLabel="Add ingredient"
-        />
-      ) : null}
-      {editingId === null ? (
-        <button
-          className={styles.addButton}
-          disabled={pending || banner === "conflict"}
-          onClick={openNew}
-          type="button"
-        >
-          Add ingredient
-        </button>
+      {structured ? (
+        <div className={styles.sectionCreation}>
+          <label htmlFor="new-section-name">New section name</label>
+          <input
+            disabled={Boolean(renamingSectionId)}
+            id="new-section-name"
+            maxLength={80}
+            onChange={(event) => setSectionName(event.target.value)}
+            value={renamingSectionId ? "" : sectionName}
+          />
+          <button
+            disabled={mutationsDisabled || !sectionName.trim() || Boolean(renamingSectionId)}
+            onClick={() =>
+              void structure({ type: "addSection", name: sectionName }).then((saved) => {
+                if (saved) setSectionName("");
+              })
+            }
+            type="button"
+          >
+            Add section
+          </button>
+        </div>
       ) : null}
     </section>
   );
 }
 
-interface IngredientFormProps {
-  data: RecipeIngredientEditorData;
-  form: FormValues;
-  ingredientQuery: string;
-  fieldErrors: Record<string, string[]>;
-  validationEntries: { field: keyof FormValues; message: string }[];
-  pending: boolean;
-  submitLabel: string;
-  submit: (event: FormEvent<HTMLFormElement>) => void;
-  cancel: () => void;
-  setIngredientQuery: (query: string) => void;
-  updateField: <Key extends keyof FormValues>(key: Key, value: FormValues[Key]) => void;
-}
-
-function IngredientForm(props: IngredientFormProps) {
-  const { form, fieldErrors, updateField } = props;
-  const summaryRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (props.validationEntries.length > 0) {
-      summaryRef.current?.focus();
-    }
-  }, [props.validationEntries.length]);
-  function error(field: keyof FormValues) {
-    return fieldErrors[field]?.[0];
-  }
-  function visibleFieldId(field: keyof FormValues) {
-    return field === "unitId" ? fieldIds.unitSource : fieldIds[field];
-  }
-  function focusField(event: MouseEvent<HTMLAnchorElement>, field: keyof FormValues) {
-    event.preventDefault();
-    document.getElementById(visibleFieldId(field))?.focus();
-  }
-  function focusWhenVisible(field: keyof FormValues) {
-    queueMicrotask(() => document.getElementById(visibleFieldId(field))?.focus());
-  }
-  function updateQuantityMinimum(value: string) {
-    if (form.quantityMode === "single" && value === "") {
-      updateField("quantityMode", "none");
-      return;
-    }
-    if (form.quantityMode === "none" && value !== "") {
-      updateField("quantityMode", "single");
-    }
-    updateField("quantityMin", value);
-  }
-  function chooseUnit(value: string) {
-    if (value === "__none") {
-      updateField("unitSource", "none");
-    } else if (value === "__custom") {
-      updateField("unitSource", "custom");
-      focusWhenVisible("customUnit");
-    } else {
-      updateField("unitSource", "canonical");
-      updateField("unitId", value);
-    }
-  }
-  const selectedUnit =
-    form.unitSource === "canonical"
-      ? form.unitId
-      : form.unitSource === "custom"
-        ? "__custom"
-        : "__none";
+function LineActions({
+  deleteActive,
+  disabled,
+  editButtonRef,
+  legacyIndex,
+  legacyLength,
+  line,
+  onAddAlternative,
+  onDelete,
+  onEdit,
+  onMoveLegacy,
+  onMoveOption,
+  optionCount,
+  optionIndex,
+  setDeleteActive,
+}: {
+  deleteActive: boolean;
+  disabled: boolean;
+  editButtonRef?: (element: HTMLButtonElement | null) => void;
+  legacyIndex?: number;
+  legacyLength?: number;
+  line: RecipeIngredientLine;
+  onAddAlternative?: () => void;
+  onDelete: () => void;
+  onEdit: () => void;
+  onMoveLegacy?: (direction: -1 | 1) => void;
+  onMoveOption?: (direction: -1 | 1) => void;
+  optionCount?: number;
+  optionIndex?: number;
+  setDeleteActive: (id: string | null) => void;
+}) {
   return (
-    <form className={styles.form} noValidate onSubmit={props.submit}>
-      {props.validationEntries.length > 0 ? (
-        <div className={styles.errorSummary} ref={summaryRef} role="alert" tabIndex={-1}>
-          <h2>Fix the following ingredient fields:</h2>
-          <ul>
-            {props.validationEntries.map(({ field, message }) => (
-              <li key={`${field}-${message}`}>
-                <a href={`#${visibleFieldId(field)}`} onClick={(event) => focusField(event, field)}>
-                  {message}
-                </a>
-              </li>
-            ))}
-          </ul>
+    <>
+      <div className={styles.lineActions}>
+        <button disabled={disabled} onClick={onEdit} ref={editButtonRef} type="button">
+          Edit
+        </button>
+        <button disabled={disabled} onClick={() => setDeleteActive(line.id)} type="button">
+          Delete
+        </button>
+        {onAddAlternative ? (
+          <button disabled={disabled} onClick={onAddAlternative} type="button">
+            Add alternative
+          </button>
+        ) : null}
+        {onMoveLegacy && legacyIndex !== undefined && legacyLength !== undefined ? (
+          <>
+            <button
+              disabled={legacyIndex === 0 || disabled}
+              onClick={() => onMoveLegacy(-1)}
+              type="button"
+            >
+              Move up
+            </button>
+            <button
+              disabled={legacyIndex === legacyLength - 1 || disabled}
+              onClick={() => onMoveLegacy(1)}
+              type="button"
+            >
+              Move down
+            </button>
+          </>
+        ) : null}
+        {onMoveOption && optionIndex !== undefined && optionCount !== undefined ? (
+          <>
+            <button
+              disabled={optionIndex === 0 || disabled}
+              onClick={() => onMoveOption(-1)}
+              type="button"
+            >
+              Move option up
+            </button>
+            <button
+              disabled={optionIndex === optionCount - 1 || disabled}
+              onClick={() => onMoveOption(1)}
+              type="button"
+            >
+              Move option down
+            </button>
+          </>
+        ) : null}
+      </div>
+      {deleteActive ? (
+        <div className={styles.deleteConfirmation}>
+          <p>Delete ingredient?</p>
+          <button disabled={disabled} onClick={onDelete} type="button">
+            Delete
+          </button>
+          <button onClick={() => setDeleteActive(null)} type="button">
+            Cancel
+          </button>
         </div>
       ) : null}
-      <fieldset className={styles.formSection}>
-        <legend>Ingredient</legend>
-        {form.ingredientSource === "canonical" ? (
-          <>
-            <IngredientPicker
-              errorId={error("ingredientId") ? "ingredient-id-error" : undefined}
-              inputId={fieldIds.ingredientId}
-              invalid={Boolean(error("ingredientId"))}
-              onChooseCustom={() => {
-                props.setIngredientQuery("");
-                updateField("ingredientSource", "custom");
-              }}
-              onQueryChange={(query) => {
-                props.setIngredientQuery(query);
-                if (form.ingredientId) updateField("ingredientId", "");
-              }}
-              onSelect={(id) => updateField("ingredientId", id)}
-              options={props.data.ingredientOptions}
-              query={props.ingredientQuery}
-              selectedId={form.ingredientId}
-            />
-            <FieldError id="ingredient-id-error" message={error("ingredientId")} />
-          </>
-        ) : (
-          <>
-            <label htmlFor={fieldIds.customIngredient}>Other ingredient</label>
-            <input
-              aria-describedby={error("customIngredient") ? "custom-ingredient-error" : undefined}
-              aria-invalid={Boolean(error("customIngredient"))}
-              id={fieldIds.customIngredient}
-              maxLength={120}
-              onChange={(event) => updateField("customIngredient", event.target.value)}
-              value={form.customIngredient}
-            />
-            <FieldError id="custom-ingredient-error" message={error("customIngredient")} />
-            <button
-              className={styles.textAction}
-              onClick={() => {
-                updateField("ingredientSource", "canonical");
-                props.setIngredientQuery("");
-              }}
-              type="button"
-            >
-              Choose from ingredient list
-            </button>
-          </>
-        )}
-      </fieldset>
-      <fieldset className={styles.formSection}>
-        <legend>
-          Quantity <span className={styles.legendQualifier}>(optional)</span>
-        </legend>
-        {form.quantityMode !== "text" ? (
-          <>
-            <label htmlFor={fieldIds.quantityMin}>
-              {form.quantityMode === "range" ? "Starting amount" : "Amount (optional)"}
-            </label>
-            <input
-              aria-describedby={error("quantityMin") ? "quantity-min-error" : undefined}
-              aria-invalid={Boolean(error("quantityMin"))}
-              id={fieldIds.quantityMin}
-              inputMode="decimal"
-              onChange={(event) => updateQuantityMinimum(event.target.value)}
-              type="text"
-              value={form.quantityMin}
-            />
-            <FieldError id="quantity-min-error" message={error("quantityMin")} />
-            <div className={styles.progressiveActions}>
-              {form.quantityMode === "range" ? (
-                <button
-                  className={styles.textAction}
-                  onClick={() => updateField("quantityMode", "single")}
-                  type="button"
-                >
-                  Remove ending amount
-                </button>
-              ) : (
-                <button
-                  className={styles.textAction}
-                  onClick={() => {
-                    updateField("quantityMode", "range");
-                    focusWhenVisible("quantityMax");
-                  }}
-                  type="button"
-                >
-                  Add an ending amount
-                </button>
-              )}
-              <button
-                className={styles.textAction}
-                onClick={() => {
-                  updateField("quantityMode", "text");
-                  focusWhenVisible("quantityText");
-                }}
-                type="button"
-              >
-                Use a written quantity
-              </button>
-            </div>
-          </>
-        ) : null}
-        {form.quantityMode === "range" ? (
-          <>
-            <label htmlFor={fieldIds.quantityMax}>Ending amount</label>
-            <input
-              aria-describedby={error("quantityMax") ? "quantity-max-error" : undefined}
-              aria-invalid={Boolean(error("quantityMax"))}
-              id={fieldIds.quantityMax}
-              inputMode="decimal"
-              onChange={(event) => updateField("quantityMax", event.target.value)}
-              type="text"
-              value={form.quantityMax}
-            />
-            <FieldError id="quantity-max-error" message={error("quantityMax")} />
-          </>
-        ) : null}
-        {form.quantityMode === "text" ? (
-          <>
-            <label htmlFor={fieldIds.quantityText}>Quantity text</label>
-            <input
-              aria-describedby={error("quantityText") ? "quantity-text-error" : undefined}
-              aria-invalid={Boolean(error("quantityText"))}
-              id={fieldIds.quantityText}
-              maxLength={40}
-              onChange={(event) => updateField("quantityText", event.target.value)}
-              value={form.quantityText}
-            />
-            <FieldError id="quantity-text-error" message={error("quantityText")} />
-            <button
-              className={styles.textAction}
-              onClick={() => {
-                updateField("quantityMode", "none");
-                focusWhenVisible("quantityMin");
-              }}
-              type="button"
-            >
-              Use a numeric amount
-            </button>
-          </>
-        ) : null}
-        {form.quantityMode !== "text" ? (
-          <>
-            <label htmlFor={fieldIds.unitSource}>Unit (optional)</label>
-            <select
-              aria-describedby={error("unitId") ? "unit-id-error" : undefined}
-              aria-invalid={Boolean(error("unitId"))}
-              id={fieldIds.unitSource}
-              onChange={(event) => chooseUnit(event.target.value)}
-              value={selectedUnit}
-            >
-              <option value="__none">No unit</option>
-              {props.data.unitOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-              <option value="__custom">Other unit...</option>
-            </select>
-            <FieldError id="unit-id-error" message={error("unitId")} />
-            {form.unitSource === "custom" ? (
-              <>
-                <label htmlFor={fieldIds.customUnit}>Other unit</label>
-                <input
-                  aria-describedby={error("customUnit") ? "custom-unit-error" : undefined}
-                  aria-invalid={Boolean(error("customUnit"))}
-                  id={fieldIds.customUnit}
-                  maxLength={40}
-                  onChange={(event) => updateField("customUnit", event.target.value)}
-                  value={form.customUnit}
-                />
-                <FieldError id="custom-unit-error" message={error("customUnit")} />
-              </>
-            ) : null}
-          </>
-        ) : null}
-      </fieldset>
-      <fieldset className={styles.formSection}>
-        <legend>
-          Details <span className={styles.legendQualifier}>(optional)</span>
-        </legend>
-        <label htmlFor={fieldIds.preparationNote}>Preparation note</label>
-        <input
-          aria-describedby={error("preparationNote") ? "preparation-note-error" : undefined}
-          aria-invalid={Boolean(error("preparationNote"))}
-          id={fieldIds.preparationNote}
-          maxLength={200}
-          onChange={(event) => updateField("preparationNote", event.target.value)}
-          value={form.preparationNote}
-        />
-        <FieldError id="preparation-note-error" message={error("preparationNote")} />
-        <label className={styles.checkbox} htmlFor={fieldIds.isOptional}>
-          <input
-            checked={form.isOptional}
-            id={fieldIds.isOptional}
-            onChange={(event) => updateField("isOptional", event.target.checked)}
-            type="checkbox"
-          />
-          This ingredient is optional
-        </label>
-      </fieldset>
-      <div className={styles.formActions}>
-        <button className={styles.primaryAction} disabled={props.pending} type="submit">
-          {props.submitLabel}
-        </button>
-        <button
-          className={styles.secondaryAction}
-          disabled={props.pending}
-          onClick={props.cancel}
-          type="button"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
+    </>
   );
 }
 
-function FieldError({ id, message }: { id: string; message?: string }) {
-  return message ? (
-    <p className={styles.error} id={id}>
-      {message}
-    </p>
-  ) : null;
+function ItemMoveActions({
+  disabled,
+  index,
+  itemCount,
+  onMove,
+}: {
+  disabled: boolean;
+  index: number;
+  itemCount: number;
+  onMove: (direction: -1 | 1) => void;
+}) {
+  return (
+    <div className={styles.itemMoveActions}>
+      <button disabled={index === 0 || disabled} onClick={() => onMove(-1)} type="button">
+        Move up
+      </button>
+      <button
+        disabled={index === itemCount - 1 || disabled}
+        onClick={() => onMove(1)}
+        type="button"
+      >
+        Move down
+      </button>
+    </div>
+  );
 }
 
-function formFromLine(line: RecipeIngredientLine): FormValues {
-  return {
-    ingredientSource: line.ingredientId ? "canonical" : "custom",
-    ingredientId: line.ingredientId ?? "",
-    customIngredient: line.customIngredient ?? "",
-    quantityMode: line.quantityText
-      ? "text"
-      : line.quantityMax !== null
-        ? "range"
-        : line.quantityMin !== null
-          ? "single"
-          : "none",
-    quantityMin: line.quantityMin?.toString() ?? "",
-    quantityMax: line.quantityMax?.toString() ?? "",
-    quantityText: line.quantityText ?? "",
-    unitSource: line.unitId ? "canonical" : line.customUnit ? "custom" : "none",
-    unitId: line.unitId ?? "",
-    customUnit: line.customUnit ?? "",
-    preparationNote: line.preparationNote ?? "",
-    isOptional: line.isOptional,
-  };
+function MoveToSection({
+  disabled,
+  itemLabel,
+  onMove,
+  sectionId,
+  sections,
+}: {
+  disabled: boolean;
+  itemLabel: string;
+  onMove: (sectionId: string) => void;
+  sectionId: string;
+  sections: RecipeIngredientSection[];
+}) {
+  return (
+    <label className={styles.moveToSection}>
+      Move {itemLabel} to section
+      <select
+        disabled={disabled}
+        onChange={(event) => {
+          if (event.target.value !== sectionId) onMove(event.target.value);
+        }}
+        value={sectionId}
+      >
+        {sections.map((section) => (
+          <option key={section.id} value={section.id}>
+            {section.name ?? "Unnamed section"}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
-function formatLine(line: RecipeIngredientLine) {
-  const quantity = line.quantityText
-    ? line.quantityText
-    : line.quantityMin !== null
-      ? line.quantityMax !== null
-        ? `${line.quantityMin}–${line.quantityMax}`
-        : `${line.quantityMin}`
-      : "";
-  return [
-    quantity,
-    line.unitName,
-    line.ingredientName,
-    line.preparationNote ? `, ${line.preparationNote}` : "",
-    line.isOptional ? " (optional)" : "",
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .replace(" ,", ",");
+function SectionHeader({
+  deleteActive,
+  disabled,
+  index,
+  name,
+  onBeginDelete,
+  onBeginRename,
+  onMove,
+  sectionCount,
+}: {
+  deleteActive: boolean;
+  disabled: boolean;
+  index: number;
+  name: string | null;
+  onBeginDelete: () => void;
+  onBeginRename: () => void;
+  onMove: (direction: -1 | 1) => void;
+  sectionCount: number;
+}) {
+  return (
+    <header className={styles.sectionHeader}>
+      <h2>{name ?? "Ingredients"}</h2>
+      <div className={styles.sectionActions}>
+        <button disabled={disabled} onClick={onBeginRename} type="button">
+          Rename section
+        </button>
+        <button disabled={disabled || index === 0} onClick={() => onMove(-1)} type="button">
+          Move section up
+        </button>
+        <button
+          disabled={disabled || index === sectionCount - 1}
+          onClick={() => onMove(1)}
+          type="button"
+        >
+          Move section down
+        </button>
+        <button
+          disabled={disabled || sectionCount <= 1 || deleteActive}
+          onClick={onBeginDelete}
+          type="button"
+        >
+          Delete section
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function InlineNameForm({
+  label,
+  onCancel,
+  onSubmit,
+  pending,
+  setValue,
+  value,
+}: {
+  label: string;
+  onCancel: () => void;
+  onSubmit: () => void;
+  pending: boolean;
+  setValue: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <div className={styles.inlineNameForm}>
+      <label>
+        {label}
+        <input maxLength={80} onChange={(event) => setValue(event.target.value)} value={value} />
+      </label>
+      <button disabled={pending || !value.trim()} onClick={onSubmit} type="button">
+        Save
+      </button>
+      <button disabled={pending} onClick={onCancel} type="button">
+        Cancel
+      </button>
+    </div>
+  );
 }

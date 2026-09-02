@@ -16,6 +16,8 @@ const pepperId = "de5797ee-837d-48ea-8367-69ea4033be6f";
 const unitId = "a934e125-6bd3-4593-91fd-22c306815b01";
 const lineId = "a66e9487-0208-4389-a2ab-80484cf9d6f2";
 const secondLineId = "cd5bda33-a782-41fd-ac25-1774d8b83771";
+const firstSectionId = "f4275994-4004-448f-b1fd-0d64f3f8ee65";
+const secondSectionId = "ef515bea-3ea8-4c62-b803-4649b6ec9c7e";
 
 const data: RecipeIngredientEditorData = {
   recipe: { id: recipeId, title: "Family Chili", version: 1 },
@@ -414,9 +416,16 @@ describe("IngredientEditor", () => {
       ingredientName: "Black pepper",
     });
     vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ data: { version: 2, ingredientIds: [secondLineId] } }), {
-        status: 200,
-      }),
+      new Response(
+        JSON.stringify({
+          data: {
+            version: 2,
+            deletedIngredientId: lineId,
+            ingredientIds: [secondLineId],
+          },
+        }),
+        { status: 200 },
+      ),
     );
     render(<IngredientEditor data={{ ...data, lines: [first, second] }} />);
 
@@ -462,5 +471,124 @@ describe("IngredientEditor", () => {
       ),
     );
     expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("Black pepper");
+  });
+
+  it("converts a standalone line into a labeled alternative with a nonoptional option", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ data: { version: 2, groupId: crypto.randomUUID() } }), {
+        status: 200,
+      }),
+    );
+    render(
+      <IngredientEditor
+        data={{
+          ...data,
+          sections: [{ id: firstSectionId, name: "Filling", position: 0 }],
+          choiceGroups: [],
+          lines: [makeLine({ sectionId: firstSectionId, choiceGroupId: null })],
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add alternative" }));
+    fireEvent.change(screen.getByLabelText("Alternative label"), {
+      target: { value: "Protein" },
+    });
+    chooseCanonicalIngredient("Black pepper");
+    expect(screen.getByLabelText("Alternative options cannot be optional")).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Create alternative" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(submittedBody()).toMatchObject({
+      expectedVersion: 1,
+      action: {
+        type: "createGroup",
+        ingredientId: lineId,
+        label: "Protein",
+        option: {
+          ingredientSource: "canonical",
+          ingredientId: pepperId,
+          isOptional: false,
+        },
+      },
+    });
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+  });
+
+  it("keeps other sections visible when deleting a line and offers explicit section disposition", async () => {
+    const first = makeLine({ sectionId: firstSectionId, choiceGroupId: null });
+    const second = makeLine({
+      id: secondLineId,
+      sectionId: secondSectionId,
+      choiceGroupId: null,
+      ingredientId: pepperId,
+      ingredientName: "Black pepper",
+    });
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: { version: 2, deletedIngredientId: lineId, ingredientIds: [] },
+        }),
+        { status: 200 },
+      ),
+    );
+    render(
+      <IngredientEditor
+        data={{
+          ...data,
+          sections: [
+            { id: firstSectionId, name: "Filling", position: 0 },
+            { id: secondSectionId, name: "Seasoning", position: 1 },
+          ],
+          choiceGroups: [],
+          lines: [first, second],
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete section" })[0]);
+    expect(screen.getByLabelText("Move its contents to")).toHaveValue(secondSectionId);
+    expect(
+      screen.getByRole("button", { name: "Move contents and delete section" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete section and contents" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    const saltItem = screen.getByText("Salt").closest("li")!;
+    fireEvent.click(within(saltItem).getByRole("button", { name: "Delete" }));
+    fireEvent.click(within(saltItem).getAllByRole("button", { name: "Delete" }).at(-1)!);
+    await waitFor(() => expect(screen.queryByText("Salt")).not.toBeInTheDocument());
+    expect(screen.getByText("Black pepper")).toBeInTheDocument();
+  });
+
+  it("announces linked instructions when a destructive change is blocked", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "CONTENT_REFERENCED",
+            message:
+              "Reassign or delete the linked instruction blocks before changing this ingredient structure.",
+            linkedSteps: [{ id: "step", position: 1, instruction: "Cook the tofu." }],
+          },
+        }),
+        { status: 409 },
+      ),
+    );
+    render(
+      <IngredientEditor
+        data={{
+          ...data,
+          sections: [{ id: firstSectionId, name: "Filling", position: 0 }],
+          choiceGroups: [],
+          lines: [makeLine({ sectionId: firstSectionId, choiceGroupId: null })],
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" }).at(-1)!);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Reassign or delete the linked instruction blocks");
+    expect(alert).toHaveTextContent("Step 2: Cook the tofu.");
+    expect(screen.getByText("Salt")).toBeInTheDocument();
   });
 });
