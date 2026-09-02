@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, max, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, max, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/server/db/client";
 import {
@@ -8,6 +8,7 @@ import {
   recipe,
   recipeIngredient,
   recipeIngredientSection,
+  recipeStep,
   unit,
 } from "@/server/db/schema";
 import type { NormalizedRecipeIngredient, RecipeIngredientLine } from "@/utils/recipe-ingredient";
@@ -17,10 +18,28 @@ export type RecipeIngredientErrorCode =
   | "VERSION_CONFLICT"
   | "INGREDIENT_UNAVAILABLE"
   | "UNIT_UNAVAILABLE"
-  | "INGREDIENT_SET_INVALID";
+  | "INGREDIENT_SET_INVALID"
+  | "CONTENT_REFERENCED"
+  | "GROUP_MINIMUM"
+  | "GROUP_OPTION_OPTIONAL"
+  | "SECTION_NOT_FOUND"
+  | "GROUP_NOT_FOUND"
+  | "STRUCTURE_INVALID"
+  | "DUPLICATE_SECTION"
+  | "UNNAMED_SECTION_REQUIRES_NAME"
+  | "LAST_SECTION";
+
+export interface LinkedRecipeStep {
+  id: string;
+  position: number;
+  instruction: string;
+}
 
 export class RecipeIngredientError extends Error {
-  constructor(readonly code: RecipeIngredientErrorCode) {
+  constructor(
+    readonly code: RecipeIngredientErrorCode,
+    readonly details?: { linkedSteps?: LinkedRecipeStep[] },
+  ) {
     super(code);
     this.name = "RecipeIngredientError";
   }
@@ -34,6 +53,7 @@ interface MutationArguments {
 
 interface WriteArguments extends MutationArguments {
   input: NormalizedRecipeIngredient;
+  sectionId?: string;
 }
 
 interface UpdateArguments extends WriteArguments {
@@ -54,22 +74,24 @@ export async function createRecipeIngredientLine({
   recipeId,
   expectedVersion,
   input,
+  sectionId,
 }: WriteArguments) {
   return getDatabase().transaction(async (transaction) => {
-    await validateReferences(transaction, input);
-    const version = await advanceVersion(transaction, recipeId, actorUserId, expectedVersion);
+    const version = await advanceRecipeVersion(transaction, recipeId, actorUserId, expectedVersion);
+    await validateIngredientReferences(transaction, input);
+    const sectionConditions = [eq(recipeIngredientSection.recipeId, recipeId)];
+    if (sectionId) {
+      sectionConditions.push(eq(recipeIngredientSection.id, sectionId));
+    } else {
+      sectionConditions.push(eq(recipeIngredientSection.position, 0));
+    }
     const [section] = await transaction
       .select({ id: recipeIngredientSection.id })
       .from(recipeIngredientSection)
-      .where(
-        and(
-          eq(recipeIngredientSection.recipeId, recipeId),
-          eq(recipeIngredientSection.position, 0),
-        ),
-      )
+      .where(and(...sectionConditions))
       .limit(1);
     if (!section) {
-      throw new RecipeIngredientError("RECIPE_NOT_FOUND");
+      throw new RecipeIngredientError(sectionId ? "SECTION_NOT_FOUND" : "RECIPE_NOT_FOUND");
     }
     const [positionResult] = await transaction
       .select({ maximum: max(recipeIngredient.position) })
@@ -84,7 +106,7 @@ export async function createRecipeIngredientLine({
       throw new Error("Ingredient insert did not return a row.");
     }
     return {
-      line: await loadSafeLine(transaction, recipeId, created.id),
+      line: await loadSafeIngredientLine(transaction, recipeId, created.id),
       version,
     };
   });
@@ -98,8 +120,28 @@ export async function updateRecipeIngredientLine({
   input,
 }: UpdateArguments) {
   return getDatabase().transaction(async (transaction) => {
-    await validateReferences(transaction, input);
-    const version = await advanceVersion(transaction, recipeId, actorUserId, expectedVersion);
+    const version = await advanceRecipeVersion(transaction, recipeId, actorUserId, expectedVersion);
+    await validateIngredientReferences(transaction, input);
+    const [current] = await transaction
+      .select({
+        choiceGroupId: recipeIngredient.choiceGroupId,
+        isOptional: recipeIngredient.isOptional,
+      })
+      .from(recipeIngredient)
+      .where(and(eq(recipeIngredient.id, ingredientId), eq(recipeIngredient.recipeId, recipeId)))
+      .limit(1);
+    if (!current) {
+      throw new RecipeIngredientError("RECIPE_NOT_FOUND");
+    }
+    if (current.choiceGroupId && input.isOptional) {
+      throw new RecipeIngredientError("GROUP_OPTION_OPTIONAL");
+    }
+    if (current.isOptional && !input.isOptional) {
+      const linkedSteps = await loadLinkedSteps(transaction, recipeId, [ingredientId]);
+      if (linkedSteps.length > 0) {
+        throw new RecipeIngredientError("CONTENT_REFERENCED", { linkedSteps });
+      }
+    }
     const [updated] = await transaction
       .update(recipeIngredient)
       .set(input)
@@ -109,7 +151,7 @@ export async function updateRecipeIngredientLine({
       throw new RecipeIngredientError("RECIPE_NOT_FOUND");
     }
     return {
-      line: await loadSafeLine(transaction, recipeId, ingredientId),
+      line: await loadSafeIngredientLine(transaction, recipeId, ingredientId),
       version,
     };
   });
@@ -122,7 +164,37 @@ export async function deleteRecipeIngredientLine({
   expectedVersion,
 }: DeleteArguments) {
   return getDatabase().transaction(async (transaction) => {
-    const version = await advanceVersion(transaction, recipeId, actorUserId, expectedVersion);
+    const version = await advanceRecipeVersion(transaction, recipeId, actorUserId, expectedVersion);
+    const [current] = await transaction
+      .select({
+        id: recipeIngredient.id,
+        sectionId: recipeIngredient.sectionId,
+        choiceGroupId: recipeIngredient.choiceGroupId,
+      })
+      .from(recipeIngredient)
+      .where(and(eq(recipeIngredient.id, ingredientId), eq(recipeIngredient.recipeId, recipeId)))
+      .limit(1);
+    if (!current) {
+      throw new RecipeIngredientError("RECIPE_NOT_FOUND");
+    }
+    const linkedSteps = await loadLinkedSteps(transaction, recipeId, [ingredientId]);
+    if (linkedSteps.length > 0) {
+      throw new RecipeIngredientError("CONTENT_REFERENCED", { linkedSteps });
+    }
+    if (current.choiceGroupId) {
+      const [groupCount] = await transaction
+        .select({ value: count() })
+        .from(recipeIngredient)
+        .where(
+          and(
+            eq(recipeIngredient.recipeId, recipeId),
+            eq(recipeIngredient.choiceGroupId, current.choiceGroupId),
+          ),
+        );
+      if ((groupCount?.value ?? 0) <= 2) {
+        throw new RecipeIngredientError("GROUP_MINIMUM");
+      }
+    }
     const [deleted] = await transaction
       .delete(recipeIngredient)
       .where(and(eq(recipeIngredient.id, ingredientId), eq(recipeIngredient.recipeId, recipeId)))
@@ -131,7 +203,11 @@ export async function deleteRecipeIngredientLine({
       throw new RecipeIngredientError("RECIPE_NOT_FOUND");
     }
     const remaining = await transaction
-      .select({ id: recipeIngredient.id, position: recipeIngredient.position })
+      .select({
+        id: recipeIngredient.id,
+        position: recipeIngredient.position,
+        choiceGroupId: recipeIngredient.choiceGroupId,
+      })
       .from(recipeIngredient)
       .where(
         and(
@@ -163,7 +239,7 @@ export async function reorderRecipeIngredientLines({
   ingredientIds,
 }: ReorderArguments) {
   return getDatabase().transaction(async (transaction) => {
-    const version = await advanceVersion(transaction, recipeId, actorUserId, expectedVersion);
+    const version = await advanceRecipeVersion(transaction, recipeId, actorUserId, expectedVersion);
     const [section] = await transaction
       .select({ id: recipeIngredientSection.id })
       .from(recipeIngredientSection)
@@ -178,7 +254,11 @@ export async function reorderRecipeIngredientLines({
       throw new RecipeIngredientError("RECIPE_NOT_FOUND");
     }
     const current = await transaction
-      .select({ id: recipeIngredient.id, position: recipeIngredient.position })
+      .select({
+        id: recipeIngredient.id,
+        position: recipeIngredient.position,
+        choiceGroupId: recipeIngredient.choiceGroupId,
+      })
       .from(recipeIngredient)
       .where(
         and(eq(recipeIngredient.recipeId, recipeId), eq(recipeIngredient.sectionId, section.id)),
@@ -186,7 +266,8 @@ export async function reorderRecipeIngredientLines({
       .orderBy(asc(recipeIngredient.position));
     if (
       current.length !== ingredientIds.length ||
-      current.some((line) => !ingredientIds.includes(line.id))
+      current.some((line) => !ingredientIds.includes(line.id)) ||
+      current.some((line) => line.choiceGroupId !== null)
     ) {
       throw new RecipeIngredientError("INGREDIENT_SET_INVALID");
     }
@@ -217,7 +298,10 @@ export async function reorderRecipeIngredientLines({
 
 type Transaction = Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0];
 
-async function validateReferences(transaction: Transaction, input: NormalizedRecipeIngredient) {
+export async function validateIngredientReferences(
+  transaction: Transaction,
+  input: NormalizedRecipeIngredient,
+) {
   // Recheck references here because an ingredient or unit may have been disabled since the form loaded.
   if (input.ingredientId) {
     const [activeIngredient] = await transaction
@@ -241,7 +325,7 @@ async function validateReferences(transaction: Transaction, input: NormalizedRec
   }
 }
 
-async function advanceVersion(
+export async function advanceRecipeVersion(
   transaction: Transaction,
   recipeId: string,
   actorUserId: string,
@@ -275,7 +359,7 @@ async function advanceVersion(
   throw new RecipeIngredientError(ownedDraft ? "VERSION_CONFLICT" : "RECIPE_NOT_FOUND");
 }
 
-async function loadSafeLine(
+export async function loadSafeIngredientLine(
   transaction: Transaction,
   recipeId: string,
   ingredientLineId: string,
@@ -283,6 +367,8 @@ async function loadSafeLine(
   const [line] = await transaction
     .select({
       id: recipeIngredient.id,
+      sectionId: recipeIngredient.sectionId,
+      choiceGroupId: recipeIngredient.choiceGroupId,
       position: recipeIngredient.position,
       ingredientId: recipeIngredient.ingredientId,
       canonicalIngredientName: ingredient.name,
@@ -306,6 +392,8 @@ async function loadSafeLine(
   }
   return {
     id: line.id,
+    sectionId: line.sectionId,
+    choiceGroupId: line.choiceGroupId,
     position: line.position,
     ingredientId: line.ingredientId,
     ingredientName: line.canonicalIngredientName ?? line.customIngredient ?? "",
@@ -319,4 +407,26 @@ async function loadSafeLine(
     preparationNote: line.preparationNote,
     isOptional: line.isOptional,
   };
+}
+
+export async function loadLinkedSteps(
+  transaction: Transaction,
+  recipeId: string,
+  ingredientIds: string[],
+): Promise<LinkedRecipeStep[]> {
+  if (ingredientIds.length === 0) return [];
+  return transaction
+    .select({
+      id: recipeStep.id,
+      position: recipeStep.position,
+      instruction: recipeStep.instruction,
+    })
+    .from(recipeStep)
+    .where(
+      and(
+        eq(recipeStep.recipeId, recipeId),
+        inArray(recipeStep.conditionIngredientId, ingredientIds),
+      ),
+    )
+    .orderBy(asc(recipeStep.position));
 }

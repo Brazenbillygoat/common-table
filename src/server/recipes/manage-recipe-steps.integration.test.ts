@@ -66,6 +66,8 @@ describe("recipe step PostgreSQL integration", () => {
           id: expect.any(String),
           position: 0,
           instruction: "Mix  gently.\nKeep warm.",
+          conditionKind: null,
+          conditionIngredientId: null,
         },
         version: 2,
       });
@@ -82,7 +84,11 @@ describe("recipe step PostgreSQL integration", () => {
       const editor = await getOwnedRecipeStepEditor(recipeId, existingUser.id);
       expect(editor).toEqual({
         recipe: { id: recipeId, title: created.title, version: 3 },
-        steps: [first.step, second.step],
+        steps: [
+          { ...first.step, conditionLabel: null },
+          { ...second.step, conditionLabel: null },
+        ],
+        conditionOptions: [],
       });
       await expect(getOwnedRecipeStepEditor(recipeId, "another-user")).resolves.toBeNull();
       await expect(
@@ -116,6 +122,8 @@ describe("recipe step PostgreSQL integration", () => {
         id: first.step.id,
         position: 0,
         instruction: "Mix thoroughly.",
+        conditionKind: null,
+        conditionIngredientId: null,
       });
       expect(updated.version).toBe(4);
 

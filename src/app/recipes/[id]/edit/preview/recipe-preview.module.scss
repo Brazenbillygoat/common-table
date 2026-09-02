@@ -1,0 +1,110 @@
+.page {
+  width: min(100%, 52rem);
+}
+
+.eyebrow,
+.stepHeading {
+  color: var(--color-accent);
+  font-weight: 800;
+}
+
+.preview {
+  display: grid;
+  gap: 2rem;
+}
+
+.preview > section {
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.choiceGroup {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-medium);
+}
+
+.choiceGroup legend {
+  padding-inline: 0.35rem;
+  font-weight: 800;
+}
+
+.choiceControl {
+  display: flex;
+  min-height: 44px;
+  gap: 0.65rem;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+.choiceControl input {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+}
+
+.choiceGroup button,
+.notice button {
+  min-height: 44px;
+  justify-self: start;
+}
+
+.notice {
+  padding: 1rem;
+  color: var(--color-text);
+  background: var(--color-accent-soft);
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-medium);
+}
+
+.ingredientSection + .ingredientSection {
+  margin-top: 1.5rem;
+}
+
+.ingredientList,
+.instructionList {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.branch {
+  padding: 0.85rem;
+  overflow-wrap: anywhere;
+  border-left: 4px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+}
+
+.active {
+  background: var(--color-accent-soft);
+  border-left-color: var(--color-accent);
+}
+
+.inactive {
+  background: var(--color-surface);
+  border-left-color: var(--color-muted);
+  border-left-style: dashed;
+}
+
+.unresolved {
+  background: var(--color-surface);
+  border: 2px dotted var(--color-border-strong);
+}
+
+.branchLabel,
+.condition {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.stepHeading,
+.instructionList p {
+  margin-block: 0 0.35rem;
+}

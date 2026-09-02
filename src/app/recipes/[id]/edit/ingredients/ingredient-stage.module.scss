@@ -234,8 +234,16 @@
 }
 
 .primaryAction,
-.secondaryAction {
+.secondaryAction,
+.dangerAction {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
   font-weight: 800;
+  text-align: center;
+  overflow-wrap: anywhere;
   border-radius: var(--radius-small);
   cursor: pointer;
 }
@@ -252,8 +260,152 @@
   border: 1px solid var(--color-border-strong);
 }
 
+.dangerAction {
+  color: var(--color-error);
+  background: var(--color-error-soft);
+  border: 1px solid var(--color-error);
+}
+
 .primaryAction:disabled,
-.secondaryAction:disabled {
-  cursor: wait;
-  opacity: 0.7;
+.secondaryAction:disabled,
+.dangerAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ingredientSection {
+  margin-block: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+}
+
+.sectionHeader,
+.groupHeading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sectionHeader h2,
+.groupHeading p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sectionActions,
+.groupActions,
+.itemMoveActions,
+.inlineNameForm,
+.sectionCreation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.sectionActions {
+  justify-content: flex-end;
+}
+
+.groupActions,
+.line > .itemMoveActions {
+  margin-top: 0.5rem;
+}
+
+.sectionActions button,
+.groupActions button,
+.itemMoveActions button,
+.inlineNameForm button,
+.sectionCreation button,
+.deleteConfirmation button {
+  min-height: 44px;
+  padding: 0.55rem 0.8rem;
+}
+
+.choiceGroup {
+  margin-block: 1rem;
+  padding: 1rem;
+  background: var(--color-accent-soft);
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-medium);
+}
+
+.optionList {
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.groupHeading span {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.inlineNameForm label,
+.sectionCreation,
+.groupLabelField,
+.moveToSection {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 800;
+}
+
+.inlineNameForm input,
+.sectionCreation input,
+.groupLabelField input,
+.moveToSection select,
+.deleteConfirmation select {
+  min-height: 44px;
+  min-width: 0;
+  padding: 0.6rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+}
+
+.moveToSection {
+  margin-top: 0.75rem;
+}
+
+.blockedHelp {
+  margin-block: 1rem;
+  padding: 1rem;
+  color: var(--color-text);
+  background: var(--color-error-soft);
+  border-left: 4px solid var(--color-error);
+}
+
+.blockedHelp p {
+  margin-top: 0;
+  font-weight: 800;
+}
+
+.sectionCreation {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 34rem) {
+  .sectionActions,
+  .groupActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .sectionActions button,
+  .groupActions button,
+  .lineActions button,
+  .itemMoveActions button {
+    flex: 1 1 8rem;
+  }
+
+  .deleteConfirmation button {
+    flex: 1 1 100%;
+  }
 }

@@ -21,6 +21,10 @@ describe("RecipeEditNavigation", () => {
       "aria-current",
       "page",
     );
+    expect(screen.getByRole("link", { name: "Preview" })).toHaveAttribute(
+      "href",
+      `/recipes/${recipeId}/edit/preview`,
+    );
     expect(screen.getByRole("link", { name: "My recipes" })).toHaveAttribute("href", "/recipes");
   });
 });

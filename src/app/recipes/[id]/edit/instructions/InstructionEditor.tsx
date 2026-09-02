@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import {
   type RecipeStep,
+  type RecipeStepConditionOption,
   type RecipeStepEditorData,
   recipeStepRequestSchema,
 } from "@/utils/recipe-step";
@@ -12,6 +13,7 @@ import {
 import styles from "./instruction-stage.module.scss";
 
 type Banner = "none" | "auth" | "conflict" | "failure";
+type ConditionKind = "always" | "choice_option" | "optional_ingredient";
 
 export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
   const router = useRouter();
@@ -19,7 +21,9 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
   const [version, setVersion] = useState(data.recipe.version);
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [instruction, setInstruction] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<string[]>([]);
+  const [conditionKind, setConditionKind] = useState<ConditionKind>("always");
+  const [conditionIngredientId, setConditionIngredientId] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [pending, setPending] = useState(false);
   const [banner, setBanner] = useState<Banner>("none");
   const [status, setStatus] = useState("Draft saved");
@@ -29,22 +33,29 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
   const editButtons = useRef(new Map<string, HTMLButtonElement>());
+  const conditionOptions = data.conditionOptions ?? [];
 
   useEffect(() => {
     if (editingId !== null) queueMicrotask(() => textareaRef.current?.focus());
   }, [editingId]);
 
   useEffect(() => {
-    if (fieldErrors.length > 0) queueMicrotask(() => summaryRef.current?.focus());
+    if (Object.keys(fieldErrors).length > 0) queueMicrotask(() => summaryRef.current?.focus());
   }, [fieldErrors]);
 
   useEffect(() => {
     if (banner !== "none") bannerRef.current?.focus();
   }, [banner]);
 
-  function openNew() {
+  function resetForm() {
     setInstruction("");
-    setFieldErrors([]);
+    setConditionKind("always");
+    setConditionIngredientId("");
+    setFieldErrors({});
+  }
+
+  function openNew() {
+    resetForm();
     setBanner("none");
     setDeletingId(null);
     setEditingId("new");
@@ -52,7 +63,9 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
 
   function openEdit(step: RecipeStep) {
     setInstruction(step.instruction);
-    setFieldErrors([]);
+    setConditionKind(step.conditionKind ?? "always");
+    setConditionIngredientId(step.conditionIngredientId ?? "");
+    setFieldErrors({});
     setBanner("none");
     setDeletingId(null);
     setEditingId(step.id);
@@ -61,8 +74,7 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
   function cancelEdit() {
     const previousId = editingId;
     setEditingId(null);
-    setInstruction("");
-    setFieldErrors([]);
+    resetForm();
     if (previousId && previousId !== "new") {
       queueMicrotask(() => editButtons.current.get(previousId)?.focus());
     }
@@ -71,9 +83,14 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (mutationLock.current || pending || banner === "conflict" || editingId === null) return;
-    const validation = recipeStepRequestSchema.safeParse({ expectedVersion: version, instruction });
+    const validation = recipeStepRequestSchema.safeParse({
+      expectedVersion: version,
+      instruction,
+      conditionKind,
+      conditionIngredientId,
+    });
     if (!validation.success) {
-      setFieldErrors(validation.error.flatten().fieldErrors.instruction ?? []);
+      setFieldErrors(validation.error.flatten().fieldErrors as Record<string, string[]>);
       return;
     }
     const isNew = editingId === "new";
@@ -82,7 +99,14 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
       : `/api/recipes/${data.recipe.id}/steps/${editingId}`;
     const result = await mutate(endpoint, isNew ? "POST" : "PATCH", validation.data);
     if (!result) return;
-    const step = result.step as RecipeStep;
+    const returned = result.step as RecipeStep;
+    const step = {
+      ...returned,
+      conditionLabel: returned.conditionIngredientId
+        ? (conditionOptions.find((option) => option.id === returned.conditionIngredientId)?.label ??
+          "Unavailable condition")
+        : null,
+    };
     setVersion(result.version as number);
     setSteps((current) =>
       isNew
@@ -90,7 +114,7 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
         : current.map((existing) => (existing.id === step.id ? step : existing)),
     );
     setEditingId(null);
-    setInstruction("");
+    resetForm();
     setStatus("Instruction saved.");
   }
 
@@ -125,12 +149,12 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
   }
 
   async function mutate(endpoint: string, method: string, body: unknown) {
-    if (mutationLock.current) return null;
+    if (mutationLock.current || banner === "conflict") return null;
     mutationLock.current = true;
     setPending(true);
     setStatus("Saving instruction...");
     setBanner("none");
-    setFieldErrors([]);
+    setFieldErrors({});
     try {
       const response = await fetch(endpoint, {
         method,
@@ -142,12 +166,8 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
         error?: { fieldErrors?: Record<string, string[]> };
       };
       if (response.ok && payload.data) return payload.data;
-      if (
-        response.status === 400 &&
-        payload.error?.fieldErrors?.instruction &&
-        editingId !== null
-      ) {
-        setFieldErrors(payload.error.fieldErrors.instruction);
+      if (response.status === 400 && payload.error?.fieldErrors && editingId !== null) {
+        setFieldErrors(payload.error.fieldErrors);
       } else if (response.status === 401) {
         setBanner("auth");
       } else if (response.status === 409) {
@@ -203,13 +223,25 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
           {steps.map((step, index) => (
             <li className={styles.step} key={step.id}>
               <p className={styles.stepLabel}>Step {index + 1}</p>
+              <p className={styles.conditionLabel}>
+                {step.conditionKind
+                  ? `Applies when: ${step.conditionLabel ?? "Unavailable condition"}`
+                  : "Applies when: Always"}
+              </p>
               {editingId === step.id ? (
                 <InstructionForm
                   cancel={cancelEdit}
+                  conditionIngredientId={conditionIngredientId}
+                  conditionKind={conditionKind}
+                  conditionOptions={conditionOptions}
                   fieldErrors={fieldErrors}
                   instruction={instruction}
                   mutationDisabled={banner === "conflict"}
                   pending={pending}
+                  setCondition={(kind, ingredientId) => {
+                    setConditionKind(kind);
+                    setConditionIngredientId(ingredientId);
+                  }}
                   setInstruction={setInstruction}
                   submit={submit}
                   submitLabel="Save changes"
@@ -224,11 +256,8 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
                       disabled={pending || banner === "conflict"}
                       onClick={() => openEdit(step)}
                       ref={(element) => {
-                        if (element) {
-                          editButtons.current.set(step.id, element);
-                        } else {
-                          editButtons.current.delete(step.id);
-                        }
+                        if (element) editButtons.current.set(step.id, element);
+                        else editButtons.current.delete(step.id);
                       }}
                       type="button"
                     >
@@ -260,7 +289,7 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
                     <div className={styles.deleteConfirmation}>
                       <p>Delete step?</p>
                       <button
-                        disabled={pending}
+                        disabled={pending || banner === "conflict"}
                         onClick={() => void deleteStep(step.id)}
                         type="button"
                       >
@@ -280,10 +309,17 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
       {editingId === "new" ? (
         <InstructionForm
           cancel={cancelEdit}
+          conditionIngredientId={conditionIngredientId}
+          conditionKind={conditionKind}
+          conditionOptions={conditionOptions}
           fieldErrors={fieldErrors}
           instruction={instruction}
           mutationDisabled={banner === "conflict"}
           pending={pending}
+          setCondition={(kind, ingredientId) => {
+            setConditionKind(kind);
+            setConditionIngredientId(ingredientId);
+          }}
           setInstruction={setInstruction}
           submit={submit}
           submitLabel="Add step"
@@ -307,10 +343,14 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
 
 function InstructionForm({
   cancel,
+  conditionIngredientId,
+  conditionKind,
+  conditionOptions,
   fieldErrors,
   instruction,
   mutationDisabled,
   pending,
+  setCondition,
   setInstruction,
   submit,
   submitLabel,
@@ -318,29 +358,39 @@ function InstructionForm({
   textareaRef,
 }: {
   cancel: () => void;
-  fieldErrors: string[];
+  conditionIngredientId: string;
+  conditionKind: ConditionKind;
+  conditionOptions: RecipeStepConditionOption[];
+  fieldErrors: Record<string, string[]>;
   instruction: string;
   mutationDisabled: boolean;
   pending: boolean;
+  setCondition: (kind: ConditionKind, ingredientId: string) => void;
   setInstruction: (value: string) => void;
   submit: (event: FormEvent<HTMLFormElement>) => void;
   submitLabel: string;
   summaryRef: React.RefObject<HTMLDivElement | null>;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
 }) {
-  function focusInstruction(event: MouseEvent<HTMLAnchorElement>) {
+  const instructionErrors = fieldErrors.instruction ?? [];
+  const conditionErrors = fieldErrors.conditionIngredientId ?? [];
+  const errors = [
+    ...instructionErrors.map((message) => ({ id: "instruction", message })),
+    ...conditionErrors.map((message) => ({ id: "step-condition", message })),
+  ];
+  function focusField(event: MouseEvent<HTMLAnchorElement>, id: string) {
     event.preventDefault();
-    textareaRef.current?.focus();
+    document.getElementById(id)?.focus();
   }
   return (
     <form className={styles.form} noValidate onSubmit={submit}>
-      {fieldErrors.length > 0 ? (
+      {errors.length > 0 ? (
         <div className={styles.errorSummary} ref={summaryRef} role="alert" tabIndex={-1}>
           <h2>Fix the following instruction fields:</h2>
           <ul>
-            {fieldErrors.map((message) => (
-              <li key={message}>
-                <a href="#instruction" onClick={focusInstruction}>
+            {errors.map(({ id, message }) => (
+              <li key={`${id}-${message}`}>
+                <a href={`#${id}`} onClick={(event) => focusField(event, id)}>
                   {message}
                 </a>
               </li>
@@ -350,8 +400,8 @@ function InstructionForm({
       ) : null}
       <label htmlFor="instruction">Instruction</label>
       <textarea
-        aria-describedby={fieldErrors.length > 0 ? "instruction-error" : undefined}
-        aria-invalid={fieldErrors.length > 0}
+        aria-describedby={instructionErrors.length > 0 ? "instruction-error" : undefined}
+        aria-invalid={instructionErrors.length > 0}
         id="instruction"
         maxLength={2_000}
         onChange={(event) => setInstruction(event.target.value)}
@@ -359,9 +409,32 @@ function InstructionForm({
         rows={5}
         value={instruction}
       />
-      {fieldErrors[0] ? (
+      {instructionErrors[0] ? (
         <p className={styles.error} id="instruction-error">
-          {fieldErrors[0]}
+          {instructionErrors[0]}
+        </p>
+      ) : null}
+      <label htmlFor="step-condition">Applies when</label>
+      <select
+        aria-describedby={conditionErrors.length > 0 ? "step-condition-error" : undefined}
+        aria-invalid={conditionErrors.length > 0}
+        id="step-condition"
+        onChange={(event) => {
+          const [kind, ingredientId = ""] = event.target.value.split(":");
+          setCondition(kind as ConditionKind, ingredientId);
+        }}
+        value={conditionKind === "always" ? "always" : `${conditionKind}:${conditionIngredientId}`}
+      >
+        <option value="always">Always</option>
+        {conditionOptions.map((option) => (
+          <option key={option.id} value={`${option.kind}:${option.id}`}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {conditionErrors[0] ? (
+        <p className={styles.error} id="step-condition-error">
+          {conditionErrors[0]}
         </p>
       ) : null}
       <div className={styles.actions}>

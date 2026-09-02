@@ -7,7 +7,7 @@ export function RecipeEditNavigation({
   currentStage,
 }: {
   recipeId: string;
-  currentStage: "ingredients" | "instructions";
+  currentStage: "ingredients" | "instructions" | "preview";
 }) {
   return (
     <nav aria-label="Recipe editing" className={styles.navigation}>
@@ -22,6 +22,12 @@ export function RecipeEditNavigation({
         href={`/recipes/${recipeId}/edit/instructions`}
       >
         Instructions
+      </Link>
+      <Link
+        aria-current={currentStage === "preview" ? "page" : undefined}
+        href={`/recipes/${recipeId}/edit/preview`}
+      >
+        Preview
       </Link>
       <Link href="/recipes">My recipes</Link>
     </nav>
