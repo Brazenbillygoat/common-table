@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { getDatabase } from "@/server/db/client";
 import {
@@ -21,7 +21,13 @@ export async function getOwnedRecipeIngredientEditor(
   const [ownedRecipe] = await database
     .select({ id: recipe.id, title: recipe.title, version: recipe.version })
     .from(recipe)
-    .where(and(eq(recipe.id, recipeId), eq(recipe.ownerId, ownerId), eq(recipe.status, "draft")))
+    .where(
+      and(
+        eq(recipe.id, recipeId),
+        eq(recipe.ownerId, ownerId),
+        inArray(recipe.status, ["draft", "published"]),
+      ),
+    )
     .limit(1);
 
   if (!ownedRecipe) {

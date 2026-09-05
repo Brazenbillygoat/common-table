@@ -23,7 +23,8 @@ The repository currently provides:
   admin plugin available for managed accounts.
 - A responsive server-rendered shell, public search foundation, sign-in and
   sign-out, private recipe and meal-plan boundaries, and light/dark theming.
-- Owner-scoped draft creation and a My recipes workspace.
+- Owner-scoped draft creation and a My Recipes workspace listing drafts and
+  published recipes, unpublished changes, editor links, and public links.
 - Existing drafts open in an owner-only Details editor for title, description,
   and optional single or ranged yield. Explicit saves reuse creation validation
   and atomically check the shared save counter without changing ingredient
@@ -39,19 +40,36 @@ The repository currently provides:
 - Instruction blocks can apply always, to one choose-one option, or to one
   optional ingredient. Referenced ingredient structures cannot be deleted or
   ungrouped until their linked instructions are reassigned or removed.
-- An owner-only draft preview resolves ingredient choices and conditional
+- An owner-only saved recipe preview resolves ingredient choices and conditional
   instructions from validated URL parameters without persisting cooking state.
   Undecided, inactive, and active branches remain explicit, and active steps
   receive one contiguous numbering sequence. A local "Hide unused ingredients
   and steps" toggle hides inactive content while retaining all choice controls
   and undecided branches; switching it off restores all content.
+- Choices, Ingredients, and Instructions have independently collapsible heading
+  buttons in both preview and public cooking pages. Sections begin expanded;
+  hiding a section preserves its controls, selected choices, URL, and local
+  hide-unused state.
+- Publish and Publish updates operate on saved content from Preview. Readiness
+  requires a valid title, an ingredient, and an instruction; description and
+  yield are optional. Unpublish requires confirmation and preserves authoring
+  content and the stable public URL.
+- A single latest typed, validated JSONB publication snapshot includes display
+  values and resolved ingredient/unit names. Owner edits remain private until
+  explicitly published. Public reads require both published status and a valid
+  snapshot and never fall back to editable rows.
+- Browse at `/` lists 20 valid published recipes per page, ordered by latest
+  publication then recipe identity. `/r/[slug]` serves published content and
+  metadata with fresh server reads. Metadata and body share one request read.
+  Native History API choice changes preserve the loaded recipe during cooking;
+  refresh or a new visit retrieves the latest publication. Existing loaded
+  pages remain usable after updates or unpublishing.
 - Canonical and recipe-owned custom ingredients and units, including numeric,
   ranged, free-form, and omitted quantities.
 - Vitest, Testing Library, ESLint, Prettier, TypeScript, build, and opt-in
   PostgreSQL integration checks.
 
-Not implemented: public recipe list and detail pages, publishing, delete and
-complete edit flows, photo storage, production search and dietary derivation,
+Not implemented: recipe deletion, photo storage, production search and dietary derivation,
 meal-plan generation, administrator reference-data UI, production hosting, or
 final icons.
 
@@ -80,6 +98,19 @@ cross-section alternative references. Canonical values and recipe-owned custom
 values are intentionally distinct. Computed values must be reproducible from
 durable inputs.
 
+Publication and unpublication lock the owned draft/published recipe before
+reading saved content and checking its version. All authoring mutations acquire
+that same parent lock before changing child rows. Snapshot replacement, status,
+and the shared version counter commit together; a failure preserves the prior
+publication. Publication's source version equals the resulting shared version,
+so subsequent authoring saves identify unpublished changes. Archived recipes
+remain unavailable for editing or publication. Unpublish removes the latest
+snapshot; historical public revisions are not accessible.
+
+Migration `0002_icy_ogun.sql` adds publication storage without publishing or
+rewriting authoring data. It fails before schema changes if the previous schema
+contains published rows requiring reconciliation.
+
 PostgreSQL full-text search, `pg_trgm`, and `unaccent` are the planned MVP search
 foundation. Search state belongs in URL parameters and ranking must remain
 deterministic.
@@ -98,6 +129,19 @@ deterministic.
 - Generated app icons are placeholders.
 
 ## Verification baseline
+
+The publication candidate passed 351 unit/component/API tests in 45 files and
+16 PostgreSQL integration tests in six files, including private-edit isolation,
+publication replacement, stale/concurrent requests, authorization, archived
+recipes, adaptive content, unpublish/republish and deterministic pagination.
+The new SQL migration was inspected and applied successfully twice. Test data
+is isolated to fixture-owned accounts and recipes. Formatting, lint, TypeScript,
+and the production build passed; Browse and public recipes render dynamically.
+Owner browser/runtime and visual acceptance is still pending.
+
+The collapsible-heading follow-up passed 13 focused shared cooking/preview
+tests, TypeScript, and changed-file lint/format checks. Earlier publication
+checks remain evidence for unchanged behavior.
 
 The Details candidate was verified on 2026-09-04: formatting, lint, TypeScript,
 230 unit/component/API tests across 39 files, the targeted PostgreSQL Details

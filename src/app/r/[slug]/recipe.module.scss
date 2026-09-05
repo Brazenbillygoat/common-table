@@ -1,0 +1,35 @@
+.page {
+  width: min(100%, 52rem);
+}
+
+.browseLink {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--color-accent);
+}
+
+.header {
+  margin-block: 1rem 2rem;
+  overflow-wrap: anywhere;
+}
+
+.header h1 {
+  margin-block: 0.5rem 1rem;
+  font-size: clamp(2rem, 8vw, 3.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+
+.author {
+  color: var(--color-muted);
+}
+
+.description {
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.yield {
+  font-weight: 800;
+}

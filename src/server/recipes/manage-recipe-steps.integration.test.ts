@@ -19,22 +19,24 @@ import {
   updateRecipeStep,
 } from "./manage-recipe-steps";
 
-describe("recipe step PostgreSQL integration", () => {
+describe.each(["draft", "published"] as const)("PostgreSQL steps (%s)", (status) => {
   afterAll(async () => {
     await closeDatabase();
   });
 
   it("persists, reads, versions, reorders, conflicts, deletes, and rolls back", async () => {
     const database = getDatabase();
-    const [existingUser] = await database.select({ id: user.id }).from(user).limit(1);
-    if (!existingUser) {
-      throw new Error("Integration test requires one existing user.");
-    }
+    const ownerId = `step-owner-${crypto.randomUUID()}`;
 
     let recipeId: string | undefined;
     try {
+      await database.insert(user).values({
+        id: ownerId,
+        name: "Step test owner",
+        email: `${ownerId}@example.invalid`,
+      });
       const created = await createRecipeDraft({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         input: {
           title: `Step integration ${crypto.randomUUID()}`,
           description: null,
@@ -44,19 +46,23 @@ describe("recipe step PostgreSQL integration", () => {
         },
       });
       recipeId = created.id;
+      await database
+        .update(recipe)
+        .set({ status, publishedAt: status === "published" ? new Date() : null })
+        .where(eq(recipe.id, recipeId));
       const [initial] = await database
         .select({ updatedAt: recipe.updatedAt })
         .from(recipe)
         .where(eq(recipe.id, recipeId));
 
       const first = await createRecipeStep({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 1,
         input: { instruction: "Mix  gently.\nKeep warm." },
       });
       const second = await createRecipeStep({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 2,
         input: { instruction: "Serve." },
@@ -77,11 +83,11 @@ describe("recipe step PostgreSQL integration", () => {
         .select({ ownerId: recipe.ownerId, version: recipe.version, updatedAt: recipe.updatedAt })
         .from(recipe)
         .where(eq(recipe.id, recipeId));
-      expect(afterCreate?.ownerId).toBe(existingUser.id);
+      expect(afterCreate?.ownerId).toBe(ownerId);
       expect(afterCreate?.version).toBe(3);
       expect(afterCreate?.updatedAt.getTime()).toBeGreaterThan(initial?.updatedAt.getTime() ?? 0);
 
-      const editor = await getOwnedRecipeStepEditor(recipeId, existingUser.id);
+      const editor = await getOwnedRecipeStepEditor(recipeId, ownerId);
       expect(editor).toEqual({
         recipe: { id: recipeId, title: created.title, version: 3 },
         steps: [
@@ -112,7 +118,7 @@ describe("recipe step PostgreSQL integration", () => {
       ).toHaveLength(2);
 
       const updated = await updateRecipeStep({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         stepId: first.step.id,
         expectedVersion: 3,
@@ -128,7 +134,7 @@ describe("recipe step PostgreSQL integration", () => {
       expect(updated.version).toBe(4);
 
       const reordered = await reorderRecipeSteps({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 4,
         stepIds: [second.step.id, first.step.id],
@@ -147,7 +153,7 @@ describe("recipe step PostgreSQL integration", () => {
 
       await expect(
         updateRecipeStep({
-          actorUserId: existingUser.id,
+          actorUserId: ownerId,
           recipeId,
           stepId: first.step.id,
           expectedVersion: 4,
@@ -163,7 +169,7 @@ describe("recipe step PostgreSQL integration", () => {
 
       await expect(
         updateRecipeStep({
-          actorUserId: existingUser.id,
+          actorUserId: ownerId,
           recipeId,
           stepId: crypto.randomUUID(),
           expectedVersion: 5,
@@ -173,7 +179,7 @@ describe("recipe step PostgreSQL integration", () => {
       const [afterRollback] = await database
         .select({ version: recipe.version })
         .from(recipe)
-        .where(and(eq(recipe.id, recipeId), eq(recipe.ownerId, existingUser.id)));
+        .where(and(eq(recipe.id, recipeId), eq(recipe.ownerId, ownerId)));
       expect(afterRollback?.version).toBe(5);
       expect(
         await database
@@ -183,7 +189,7 @@ describe("recipe step PostgreSQL integration", () => {
       ).toHaveLength(2);
 
       const deleted = await deleteRecipeStep({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         stepId: second.step.id,
         expectedVersion: 5,
@@ -201,20 +207,20 @@ describe("recipe step PostgreSQL integration", () => {
       ).toEqual([{ id: first.step.id, position: 0 }]);
 
       await database.update(recipe).set({ status: "archived" }).where(eq(recipe.id, recipeId));
-      await expect(getOwnedRecipeStepEditor(recipeId, existingUser.id)).resolves.toBeNull();
+      await expect(getOwnedRecipeStepEditor(recipeId, ownerId)).resolves.toBeNull();
       await expect(
         createRecipeStep({
-          actorUserId: existingUser.id,
+          actorUserId: ownerId,
           recipeId,
           expectedVersion: 6,
-          input: { instruction: "Nondraft." },
+          input: { instruction: "Archived." },
         }),
       ).rejects.toMatchObject({ code: "RECIPE_NOT_FOUND" });
-      const [afterNondraftMutation] = await database
+      const [afterArchivedMutation] = await database
         .select({ version: recipe.version })
         .from(recipe)
         .where(eq(recipe.id, recipeId));
-      expect(afterNondraftMutation?.version).toBe(6);
+      expect(afterArchivedMutation?.version).toBe(6);
       expect(
         await database
           .select({ id: recipeStep.id })
@@ -225,6 +231,7 @@ describe("recipe step PostgreSQL integration", () => {
       if (recipeId) {
         await database.delete(recipe).where(eq(recipe.id, recipeId));
       }
+      await database.delete(user).where(eq(user.id, ownerId));
     }
   });
 });

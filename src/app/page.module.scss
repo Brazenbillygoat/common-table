@@ -1,0 +1,53 @@
+.recipeList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1.25rem;
+  padding: 0;
+  list-style: none;
+}
+
+.recipeCard {
+  padding: 1.25rem;
+  overflow-wrap: anywhere;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+}
+
+.recipeCard h2 {
+  margin-top: 0;
+}
+
+.recipeCard a {
+  display: inline-block;
+  min-height: 44px;
+  padding-block: 0.5rem;
+  color: var(--color-accent);
+}
+
+.description {
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.author {
+  color: var(--color-muted);
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 2rem;
+}
+
+.pagination a {
+  display: inline-flex;
+  min-height: 44px;
+  padding: 0.75rem 1rem;
+  align-items: center;
+  color: var(--color-accent);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+}

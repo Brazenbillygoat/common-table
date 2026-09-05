@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDatabase } from "@/server/db/client";
@@ -43,6 +43,7 @@ export async function updateRecipeDetails({
 
   // Fields and the shared save counter change in one conditional statement. A competing
   // ingredient, instruction, or Details save can therefore never be overwritten silently.
+  // Updating the parent row also serializes this save with publication's parent-row lock.
   const [updated] = await database
     .update(recipe)
     .set({
@@ -58,7 +59,7 @@ export async function updateRecipeDetails({
       and(
         eq(recipe.id, recipeId),
         eq(recipe.ownerId, actorUserId),
-        eq(recipe.status, "draft"),
+        inArray(recipe.status, ["draft", "published"]),
         eq(recipe.version, expectedVersion),
       ),
     )
@@ -73,14 +74,18 @@ export async function updateRecipeDetails({
     });
   if (updated) return updated;
 
-  // Only an owned draft may reveal that its version changed. All other cases
-  // share the unavailable result, including published and archived recipes.
-  const [ownedDraft] = await database
+  // Only an owned editable recipe may reveal that its version changed. Archived
+  // recipes and other owners' recipes share the same unavailable result.
+  const [ownedRecipe] = await database
     .select({ id: recipe.id })
     .from(recipe)
     .where(
-      and(eq(recipe.id, recipeId), eq(recipe.ownerId, actorUserId), eq(recipe.status, "draft")),
+      and(
+        eq(recipe.id, recipeId),
+        eq(recipe.ownerId, actorUserId),
+        inArray(recipe.status, ["draft", "published"]),
+      ),
     )
     .limit(1);
-  throw new RecipeDetailsError(ownedDraft ? "VERSION_CONFLICT" : "RECIPE_NOT_FOUND");
+  throw new RecipeDetailsError(ownedRecipe ? "VERSION_CONFLICT" : "RECIPE_NOT_FOUND");
 }

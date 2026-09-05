@@ -17,13 +17,15 @@ import {
 } from "@/server/db/schema";
 
 import { createRecipeDraft } from "./create-recipe-draft";
+import { getOwnedRecipe } from "./get-owned-recipe";
 import { getOwnedRecipeDetails } from "./get-owned-recipe-details";
 import { getOwnedRecipeIngredientEditor } from "./get-owned-recipe-ingredient-editor";
+import { getOwnedRecipePreview } from "./get-owned-recipe-preview";
 import { getOwnedRecipeStepEditor } from "./get-owned-recipe-step-editor";
 import { listOwnedRecipeDrafts } from "./list-owned-recipe-drafts";
 import { updateRecipeDetails } from "./update-recipe-details";
 
-describe("draft Details PostgreSQL integration", () => {
+describe.each(["draft", "published"] as const)("%s Details PostgreSQL integration", (status) => {
   afterAll(async () => {
     await closeDatabase();
   });
@@ -53,6 +55,10 @@ describe("draft Details PostgreSQL integration", () => {
         },
       });
       recipeId = created.id;
+      await database
+        .update(recipe)
+        .set({ status, publishedAt: status === "published" ? new Date() : null })
+        .where(eq(recipe.id, recipeId));
       expect(created.editUrl).toBe(`/recipes/${recipeId}/edit/ingredients`);
       const [initial] = await database.select().from(recipe).where(eq(recipe.id, recipeId));
       const [section] = await database
@@ -128,6 +134,8 @@ describe("draft Details PostgreSQL integration", () => {
       });
       expect(ranged).toMatchObject({ yieldMin: 6, yieldMax: 8, yieldUnit: "portions", version: 3 });
       expect(await getOwnedRecipeDetails(recipeId, ownerId)).toEqual(ranged);
+      expect(await getOwnedRecipe(recipeId, ownerId)).toMatchObject({ id: recipeId, status });
+      expect((await getOwnedRecipePreview(recipeId, ownerId))?.recipe).toEqual(ranged);
       expect(await listOwnedRecipeDrafts(ownerId)).toEqual([
         expect.objectContaining({ id: recipeId, title: ranged.title, version: 3 }),
       ]);
@@ -244,23 +252,22 @@ describe("draft Details PostgreSQL integration", () => {
       });
       expect(await getOwnedRecipeDetails(recipeId, ownerId)).toEqual(cleared);
 
-      for (const status of ["published", "archived"] as const) {
-        await database
-          .update(recipe)
-          .set({ status, publishedAt: status === "published" ? new Date() : null })
-          .where(eq(recipe.id, recipeId));
-        await expect(getOwnedRecipeDetails(recipeId, ownerId)).resolves.toBeNull();
-        await expect(
-          updateRecipeDetails({
-            actorUserId: ownerId,
-            recipeId,
-            expectedVersion: 5,
-            input: rangedInput,
-          }),
-        ).rejects.toMatchObject({ code: "RECIPE_NOT_FOUND" });
-        const [unavailable] = await database.select().from(recipe).where(eq(recipe.id, recipeId));
-        expect(unavailable).toMatchObject({ title: cleared.title, version: 5, status });
-      }
+      await database.update(recipe).set({ status: "archived" }).where(eq(recipe.id, recipeId));
+      await expect(getOwnedRecipe(recipeId, ownerId)).resolves.toBeNull();
+      await expect(getOwnedRecipeDetails(recipeId, ownerId)).resolves.toBeNull();
+      await expect(getOwnedRecipeIngredientEditor(recipeId, ownerId)).resolves.toBeNull();
+      await expect(getOwnedRecipeStepEditor(recipeId, ownerId)).resolves.toBeNull();
+      await expect(getOwnedRecipePreview(recipeId, ownerId)).resolves.toBeNull();
+      await expect(
+        updateRecipeDetails({
+          actorUserId: ownerId,
+          recipeId,
+          expectedVersion: 5,
+          input: rangedInput,
+        }),
+      ).rejects.toMatchObject({ code: "RECIPE_NOT_FOUND" });
+      const [unavailable] = await database.select().from(recipe).where(eq(recipe.id, recipeId));
+      expect(unavailable).toMatchObject({ title: cleared.title, version: 5, status: "archived" });
     } finally {
       if (recipeId) await database.delete(recipe).where(eq(recipe.id, recipeId));
       await database.delete(user).where(inArray(user.id, [ownerId, otherOwnerId]));

@@ -8,9 +8,23 @@ their own recipes. Meal plans remain private to their owner.
 
 Repository: [github.com/Brazenbillygoat/common-table](https://github.com/Brazenbillygoat/common-table)
 
-The current application supports authenticated recipe drafts, including
-creating drafts and adding, editing, reordering, and deleting ingredient lines.
-Recipe discovery and meal planning are still in development.
+The application supports owner-controlled recipe authoring, ingredient
+alternatives, conditional instructions, and publishing. Browse lists public
+recipes; each public recipe supports cooking choices and hiding unused content.
+Search, filters, photos, and meal planning are still in development.
+
+## Publish a recipe
+
+Save your changes in the editors, then open Preview. Publishing requires a
+title, at least one ingredient, and at least one instruction. Description and
+yield are optional. After publishing, edits stay private until you choose
+Publish updates. My Recipes shows publication status and unpublished changes.
+
+An open public recipe keeps its loaded content while you cook and change
+choices. Refresh or open it again to get the latest publication. Unpublish
+removes it from Browse and prevents new visits, while already-open pages stay
+usable. Saved authoring content remains available, and publishing again uses
+the same public URL.
 
 ## Stack
 
@@ -41,6 +55,10 @@ npm.cmd run dev
 ```
 
 The local application uses `http://localhost:3000`.
+
+The publication migration preserves drafts and does not publish recipes. If an
+older database contains records already marked published without snapshots,
+the migration stops for explicit reconciliation before upgrade.
 
 ## Create an account
 
@@ -75,3 +93,7 @@ git diff --check
 
 Architecture and current implementation state are documented in
 `docs/PROJECT_CONTEXT.md`.
+
+PostgreSQL integration tests are opt-in. With the local database running and
+migrated, set `RUN_DATABASE_TESTS=1` for `npm.cmd test -- .integration.test.ts`,
+then restore its previous value. Fixtures create and remove only their own data.

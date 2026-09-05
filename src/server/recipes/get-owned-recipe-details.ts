@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDatabase } from "@/server/db/client";
@@ -13,7 +13,7 @@ export async function getOwnedRecipeDetails(
 ): Promise<OwnedRecipeDetails | null> {
   if (!z.string().uuid().safeParse(recipeId).success) return null;
 
-  const [ownedDraft] = await getDatabase()
+  const [ownedRecipe] = await getDatabase()
     .select({
       id: recipe.id,
       title: recipe.title,
@@ -24,8 +24,14 @@ export async function getOwnedRecipeDetails(
       version: recipe.version,
     })
     .from(recipe)
-    .where(and(eq(recipe.id, recipeId), eq(recipe.ownerId, ownerId), eq(recipe.status, "draft")))
+    .where(
+      and(
+        eq(recipe.id, recipeId),
+        eq(recipe.ownerId, ownerId),
+        inArray(recipe.status, ["draft", "published"]),
+      ),
+    )
     .limit(1);
 
-  return ownedDraft ?? null;
+  return ownedRecipe ?? null;
 }

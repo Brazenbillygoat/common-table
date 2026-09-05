@@ -32,7 +32,7 @@ describe("getOwnedRecipeDetails", () => {
     expect(mocks.limit).toHaveBeenCalledWith(1);
   });
 
-  it("returns null for unavailable drafts and rejects malformed IDs before database access", async () => {
+  it("returns null for unavailable recipes and rejects malformed IDs before database access", async () => {
     mocks.limit.mockResolvedValue([]);
     await expect(
       getOwnedRecipeDetails("34053bb6-c957-4d2d-a621-b2e34b774a1d", "other-owner"),

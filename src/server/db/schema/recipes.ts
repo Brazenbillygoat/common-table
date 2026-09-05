@@ -5,6 +5,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -18,6 +19,7 @@ import {
 import { user } from "./auth";
 import { timestampColumns } from "./helpers";
 import { ingredient, taxonomyKind, taxonomyValue, unit } from "./reference";
+import type { PublishedRecipeSnapshot } from "@/utils/recipe-publication";
 
 export const recipeStatus = pgEnum("recipe_status", ["draft", "published", "archived"]);
 
@@ -72,6 +74,27 @@ export const recipe = pgTable(
         or (${table.status} <> 'published')
       `,
     ),
+  ],
+);
+
+export const recipePublication = pgTable(
+  "recipe_publications",
+  {
+    recipeId: uuid("recipe_id")
+      .primaryKey()
+      .references(() => recipe.id, { onDelete: "cascade" }),
+    snapshot: jsonb("snapshot").$type<PublishedRecipeSnapshot>().notNull(),
+    formatVersion: integer("format_version").notNull(),
+    sourceVersion: integer("source_version").notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index("recipe_publications_published_idx").on(table.publishedAt, table.recipeId),
+    check(
+      "recipe_publications_version_positive",
+      sql`${table.sourceVersion} > 0 and ${table.formatVersion} > 0`,
+    ),
+    check("recipe_publications_snapshot_object", sql`jsonb_typeof(${table.snapshot}) = 'object'`),
   ],
 );
 

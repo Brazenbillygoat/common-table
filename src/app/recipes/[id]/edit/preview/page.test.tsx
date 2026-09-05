@@ -7,12 +7,23 @@ const recipeId = "34053bb6-c957-4d2d-a621-b2e34b774a1d";
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(),
   getOwnedRecipePreview: vi.fn(),
+  getOwnedRecipePublication: vi.fn(),
   renderContent: vi.fn(),
+  renderPublication: vi.fn(),
 }));
 
 vi.mock("@/server/auth/session", () => ({ requireUser: mocks.requireUser }));
 vi.mock("@/server/recipes/get-owned-recipe-preview", () => ({
   getOwnedRecipePreview: mocks.getOwnedRecipePreview,
+}));
+vi.mock("@/server/recipes/manage-recipe-publication", () => ({
+  getOwnedRecipePublication: mocks.getOwnedRecipePublication,
+}));
+vi.mock("./PublicationControls", () => ({
+  PublicationControls: (props: unknown) => {
+    mocks.renderPublication(props);
+    return <p>Publication controls</p>;
+  },
 }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -48,6 +59,13 @@ describe("RecipePreviewPage", () => {
     vi.clearAllMocks();
     mocks.requireUser.mockResolvedValue({ user: { id: "trusted-owner" } });
     mocks.getOwnedRecipePreview.mockResolvedValue(preview);
+    mocks.getOwnedRecipePublication.mockResolvedValue({
+      version: 3,
+      status: "draft",
+      sourceVersion: null,
+      publishedAt: null,
+      slug: "chili",
+    });
   });
 
   it("shows saved details and passes existing authored content through", async () => {
@@ -58,6 +76,42 @@ describe("RecipePreviewPage", () => {
     expect(screen.getByText(/A weeknight favorite/).textContent).toBe(preview.recipe.description);
     expect(screen.getByText("Yield: 4 servings")).toBeInTheDocument();
     expect(mocks.renderContent).toHaveBeenCalledWith(preview);
+    expect(mocks.getOwnedRecipePublication).toHaveBeenCalledWith(recipeId, "trusted-owner");
+    expect(mocks.renderPublication).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipeId,
+        stale: false,
+        requirements: expect.arrayContaining([
+          expect.objectContaining({ stage: "ingredients" }),
+          expect.objectContaining({ stage: "instructions" }),
+        ]),
+      }),
+    );
+  });
+
+  it("blocks publication when the saved content changed between preview and publication reads", async () => {
+    mocks.getOwnedRecipePublication.mockResolvedValue({
+      version: 4,
+      status: "published",
+      sourceVersion: 4,
+      publishedAt: new Date("2026-09-04T18:00:00.000Z"),
+      slug: "chili",
+    });
+    render(await RecipePreviewPage({ params: Promise.resolve({ id: recipeId }) }));
+    expect(mocks.renderPublication).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stale: true,
+        publication: expect.objectContaining({ publishedAt: "2026-09-04T18:00:00.000Z" }),
+      }),
+    );
+  });
+
+  it("treats recipes removed between reads as unavailable", async () => {
+    mocks.getOwnedRecipePublication.mockResolvedValue(null);
+    await expect(RecipePreviewPage({ params: Promise.resolve({ id: recipeId }) })).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+    expect(mocks.renderPublication).not.toHaveBeenCalled();
   });
 
   it.each([

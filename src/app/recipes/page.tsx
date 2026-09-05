@@ -20,7 +20,7 @@ export default async function MyRecipesPage() {
         <div>
           <p className={styles.eyebrow}>Recipe workspace</p>
           <h1>My recipes</h1>
-          <p>Continue a draft or start something new.</p>
+          <p>Edit your saved recipes or start something new.</p>
         </div>
         <Link className={styles.primaryAction} href="/recipes/new">
           Start a recipe
@@ -28,7 +28,7 @@ export default async function MyRecipesPage() {
       </header>
       {drafts.length === 0 ? (
         <section className={styles.emptyState}>
-          <h2>No recipe drafts yet</h2>
+          <h2>No recipes yet</h2>
           <p>Start a recipe when you’re ready to add one.</p>
         </section>
       ) : (
@@ -36,7 +36,10 @@ export default async function MyRecipesPage() {
           {drafts.map((draft) => (
             <li className={styles.draft} key={draft.id}>
               <div>
-                <p className={styles.draftStatus}>Draft</p>
+                <p className={styles.draftStatus}>
+                  {draft.status === "published" ? "Published" : "Draft"}
+                  {draft.unpublishedChanges ? " · Unpublished changes" : ""}
+                </p>
                 <h2>{draft.title}</h2>
                 <p>
                   Updated{" "}
@@ -49,7 +52,13 @@ export default async function MyRecipesPage() {
                   </time>
                 </p>
               </div>
-              <Link href={`/recipes/${draft.id}/edit/details`}>Edit recipe</Link>
+              <div className={styles.recipeActions}>
+                <Link href={`/recipes/${draft.id}/edit/details`}>Edit recipe</Link>
+                <Link href={`/recipes/${draft.id}/edit/preview`}>Preview and publish</Link>
+                {draft.status === "published" ? (
+                  <a href={`/r/${encodeURIComponent(draft.slug)}`}>View public recipe</a>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

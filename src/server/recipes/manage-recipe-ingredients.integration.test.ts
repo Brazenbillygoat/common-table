@@ -20,14 +20,14 @@ import {
   updateRecipeIngredientLine,
 } from "./manage-recipe-ingredients";
 
-describe("recipe ingredient PostgreSQL integration", () => {
+describe.each(["draft", "published"] as const)("PostgreSQL ingredients (%s)", (status) => {
   afterAll(async () => {
     await closeDatabase();
   });
 
   it("persists, versions, reorders, deletes, conflicts, and rolls back", async () => {
     const database = getDatabase();
-    const [existingUser] = await database.select({ id: user.id }).from(user).limit(1);
+    const ownerId = `ingredient-owner-${crypto.randomUUID()}`;
     const [canonicalIngredient] = await database
       .select({ id: ingredient.id })
       .from(ingredient)
@@ -38,14 +38,19 @@ describe("recipe ingredient PostgreSQL integration", () => {
       .from(unit)
       .where(eq(unit.isActive, true))
       .limit(1);
-    if (!existingUser || !canonicalIngredient || !canonicalUnit) {
-      throw new Error("Integration test requires one user and active reference rows.");
+    if (!canonicalIngredient || !canonicalUnit) {
+      throw new Error("Integration test requires active reference rows.");
     }
 
     let recipeId: string | undefined;
     try {
+      await database.insert(user).values({
+        id: ownerId,
+        name: "Ingredient test owner",
+        email: `${ownerId}@example.invalid`,
+      });
       const created = await createRecipeDraft({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         input: {
           title: `Ingredient integration ${crypto.randomUUID()}`,
           description: null,
@@ -55,11 +60,15 @@ describe("recipe ingredient PostgreSQL integration", () => {
         },
       });
       recipeId = created.id;
+      await database
+        .update(recipe)
+        .set({ status, publishedAt: status === "published" ? new Date() : null })
+        .where(eq(recipe.id, recipeId));
       const [initialRecipe] = await database
         .select({ updatedAt: recipe.updatedAt })
         .from(recipe)
         .where(eq(recipe.id, recipeId));
-      const ownedDrafts = await listOwnedRecipeDrafts(existingUser.id);
+      const ownedDrafts = await listOwnedRecipeDrafts(ownerId);
       expect(ownedDrafts).toContainEqual(
         expect.objectContaining({
           id: recipeId,
@@ -69,7 +78,7 @@ describe("recipe ingredient PostgreSQL integration", () => {
       );
 
       const first = await createRecipeIngredientLine({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 1,
         input: {
@@ -85,7 +94,7 @@ describe("recipe ingredient PostgreSQL integration", () => {
         },
       });
       const second = await createRecipeIngredientLine({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 2,
         input: {
@@ -109,7 +118,7 @@ describe("recipe ingredient PostgreSQL integration", () => {
       expect(mutatedRecipe?.updatedAt.getTime()).toBeGreaterThan(
         initialRecipe?.updatedAt.getTime() ?? 0,
       );
-      const editor = await getOwnedRecipeIngredientEditor(recipeId, existingUser.id);
+      const editor = await getOwnedRecipeIngredientEditor(recipeId, ownerId);
       expect(editor?.recipe).toEqual({
         id: recipeId,
         title: created.title,
@@ -119,9 +128,17 @@ describe("recipe ingredient PostgreSQL integration", () => {
       expect(editor?.ingredientOptions.length).toBeGreaterThan(0);
       expect(editor?.unitOptions.length).toBeGreaterThan(0);
       await expect(getOwnedRecipeIngredientEditor(recipeId, "another-user")).resolves.toBeNull();
+      await expect(
+        deleteRecipeIngredientLine({
+          actorUserId: "another-user",
+          recipeId,
+          ingredientId: first.line.id,
+          expectedVersion: 3,
+        }),
+      ).rejects.toMatchObject({ code: "RECIPE_NOT_FOUND" });
 
       const updated = await updateRecipeIngredientLine({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         ingredientId: first.line.id,
         expectedVersion: 3,
@@ -141,7 +158,7 @@ describe("recipe ingredient PostgreSQL integration", () => {
       expect(updated.version).toBe(4);
 
       const reordered = await reorderRecipeIngredientLines({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 4,
         ingredientIds: [second.line.id, first.line.id],
@@ -159,7 +176,7 @@ describe("recipe ingredient PostgreSQL integration", () => {
 
       await expect(
         deleteRecipeIngredientLine({
-          actorUserId: existingUser.id,
+          actorUserId: ownerId,
           recipeId,
           ingredientId: first.line.id,
           expectedVersion: 4,
@@ -176,7 +193,7 @@ describe("recipe ingredient PostgreSQL integration", () => {
 
       await expect(
         updateRecipeIngredientLine({
-          actorUserId: existingUser.id,
+          actorUserId: ownerId,
           recipeId,
           ingredientId: crypto.randomUUID(),
           expectedVersion: 5,
@@ -198,11 +215,11 @@ describe("recipe ingredient PostgreSQL integration", () => {
       const [afterRollback] = await database
         .select({ version: recipe.version })
         .from(recipe)
-        .where(and(eq(recipe.id, recipeId), eq(recipe.ownerId, existingUser.id)));
+        .where(and(eq(recipe.id, recipeId), eq(recipe.ownerId, ownerId)));
       expect(afterRollback?.version).toBe(5);
 
       const deleted = await deleteRecipeIngredientLine({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         ingredientId: second.line.id,
         expectedVersion: 5,
@@ -225,10 +242,34 @@ describe("recipe ingredient PostgreSQL integration", () => {
         ingredientId: canonicalIngredient.id,
         customIngredient: null,
       });
+
+      await database.update(recipe).set({ status: "archived" }).where(eq(recipe.id, recipeId));
+      await expect(getOwnedRecipeIngredientEditor(recipeId, ownerId)).resolves.toBeNull();
+      await expect(
+        deleteRecipeIngredientLine({
+          actorUserId: ownerId,
+          recipeId,
+          ingredientId: first.line.id,
+          expectedVersion: 6,
+        }),
+      ).rejects.toMatchObject({ code: "RECIPE_NOT_FOUND" });
+      expect(
+        await database
+          .select({ version: recipe.version })
+          .from(recipe)
+          .where(eq(recipe.id, recipeId)),
+      ).toEqual([{ version: 6 }]);
+      expect(
+        await database
+          .select({ id: recipeIngredient.id })
+          .from(recipeIngredient)
+          .where(eq(recipeIngredient.recipeId, recipeId)),
+      ).toEqual([{ id: first.line.id }]);
     } finally {
       if (recipeId) {
         await database.delete(recipe).where(eq(recipe.id, recipeId));
       }
+      await database.delete(user).where(eq(user.id, ownerId));
     }
   });
 });

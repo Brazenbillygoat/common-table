@@ -8,7 +8,6 @@ import { RecipePreview } from "./RecipePreview";
 const mocks = vi.hoisted(() => ({ push: vi.fn(), query: "" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/recipes/recipe/edit/preview",
-  useRouter: () => ({ push: mocks.push }),
   useSearchParams: () => new URLSearchParams(mocks.query),
 }));
 
@@ -59,6 +58,7 @@ describe("RecipePreview", () => {
   beforeEach(() => {
     mocks.query = "";
     vi.clearAllMocks();
+    vi.spyOn(window.history, "pushState").mockImplementation(mocks.push);
   });
 
   it("shows all branches, explicit states, and contiguous active numbering", () => {
@@ -147,8 +147,9 @@ describe("RecipePreview", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Hide unused ingredients and steps" }));
     fireEvent.click(screen.getByRole("radio", { name: "Pork" }));
     expect(mocks.push).toHaveBeenCalledWith(
+      null,
+      "",
       `/recipes/recipe/edit/preview?choice=${canolaId}&choice=${porkId}`,
-      { scroll: false },
     );
 
     mocks.query = `choice=${porkId}&choice=${canolaId}&optional=${optionalId}`;
@@ -246,8 +247,9 @@ describe("RecipePreview", () => {
     const rendered = render(<RecipePreview content={content} />);
     fireEvent.click(screen.getByRole("radio", { name: "Pork" }));
     expect(mocks.push).toHaveBeenCalledWith(
+      null,
+      "",
       `/recipes/recipe/edit/preview?mode=compact&choice=${canolaId}&choice=${porkId}`,
-      { scroll: false },
     );
 
     mocks.query = `choice=${porkId}&optional=${optionalId}`;
@@ -266,9 +268,7 @@ describe("RecipePreview", () => {
     );
     expect(screen.getAllByText("Undecided").length).toBeGreaterThanOrEqual(4);
     fireEvent.click(screen.getByRole("button", { name: "Remove invalid choices from URL" }));
-    expect(mocks.push).toHaveBeenCalledWith("/recipes/recipe/edit/preview?mode=compact", {
-      scroll: false,
-    });
+    expect(mocks.push).toHaveBeenCalledWith(null, "", "/recipes/recipe/edit/preview?mode=compact");
   });
 });
 
