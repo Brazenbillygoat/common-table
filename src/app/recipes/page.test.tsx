@@ -16,12 +16,13 @@ vi.mock("@/server/recipes/list-owned-recipe-drafts", () => ({
 }));
 
 describe("MyRecipesPage", () => {
-  it("uses the Edit recipe action without changing its ingredient destination", async () => {
+  it("opens existing drafts at Details and shows their saved title", async () => {
     render(await MyRecipesPage());
     expect(screen.getByRole("link", { name: "Edit recipe" })).toHaveAttribute(
       "href",
-      `/recipes/${recipeId}/edit/ingredients`,
+      `/recipes/${recipeId}/edit/details`,
     );
+    expect(screen.getByRole("heading", { name: "Chili" })).toBeInTheDocument();
     expect(screen.queryByText("Continue ingredients")).not.toBeInTheDocument();
   });
 });

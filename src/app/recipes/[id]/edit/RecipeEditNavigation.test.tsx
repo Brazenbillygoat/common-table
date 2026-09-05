@@ -9,6 +9,10 @@ describe("RecipeEditNavigation", () => {
   it("links every recipe editing destination and marks the current stage", () => {
     render(<RecipeEditNavigation currentStage="instructions" recipeId={recipeId} />);
     expect(screen.getByRole("navigation", { name: "Recipe editing" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Details" })).toHaveAttribute(
+      "href",
+      `/recipes/${recipeId}/edit/details`,
+    );
     expect(screen.getByRole("link", { name: "Ingredients" })).toHaveAttribute(
       "href",
       `/recipes/${recipeId}/edit/ingredients`,

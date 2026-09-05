@@ -1,6 +1,6 @@
 # Common Table project context
 
-Last reviewed against the repository: 2026-09-02
+Last reviewed against the repository: 2026-09-04
 
 ## Product
 
@@ -24,6 +24,14 @@ The repository currently provides:
 - A responsive server-rendered shell, public search foundation, sign-in and
   sign-out, private recipe and meal-plan boundaries, and light/dark theming.
 - Owner-scoped draft creation and a My recipes workspace.
+- Existing drafts open in an owner-only Details editor for title, description,
+  and optional single or ranged yield. Explicit saves reuse creation validation
+  and atomically check the shared save counter without changing ingredient
+  quantities or recipe identity. Creation still continues to Ingredients.
+- Details preserves unsaved input after failed saves and blocks conflicting
+  saves until an explicit reload of the latest draft. Unsaved edits warn before
+  editor/shared navigation, Sign out, and browser reload or close where supported.
+  Saved description and yield also appear in the owner preview.
 - Structured ingredient and instruction editors with validation, ordered
   content, optimistic concurrency, transactional mutations, and failure-state
   preservation. Ingredient authoring supports named sections, labeled
@@ -34,7 +42,9 @@ The repository currently provides:
 - An owner-only draft preview resolves ingredient choices and conditional
   instructions from validated URL parameters without persisting cooking state.
   Undecided, inactive, and active branches remain explicit, and active steps
-  receive one contiguous numbering sequence.
+  receive one contiguous numbering sequence. A local "Hide unused ingredients
+  and steps" toggle hides inactive content while retaining all choice controls
+  and undecided branches; switching it off restores all content.
 - Canonical and recipe-owned custom ingredients and units, including numeric,
   ranged, free-form, and omitted quantities.
 - Vitest, Testing Library, ESLint, Prettier, TypeScript, build, and opt-in
@@ -89,11 +99,16 @@ deterministic.
 
 ## Verification baseline
 
-The most recent full automated application verification was 2026-09-02:
-formatting, lint, TypeScript, 175 tests across 33 files with PostgreSQL
-integration enabled, the Next.js production build, migration application twice,
-idempotent seed, schema-drift generation, and `git diff --check` passed. Owner
-browser and visual acceptance remains separate.
+The Details candidate was verified on 2026-09-04: formatting, lint, TypeScript,
+230 unit/component/API tests across 39 files, the targeted PostgreSQL Details
+integration test, the Next.js production build, and `git diff --check` passed.
+The affected component suite was rerun after correcting a test's effect-cleanup
+wait. No schema or migration changes were needed. Owner browser and visual
+acceptance remains separate.
+
+The Preview visibility follow-up passed 14 focused Preview/resolver tests,
+TypeScript, Sass compilation, and changed-file lint/format checks. Prior
+verification remains applicable to unchanged application behavior.
 
 ## Documentation roles
 

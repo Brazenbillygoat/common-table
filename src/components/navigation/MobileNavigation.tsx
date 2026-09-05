@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { GuardedLink } from "./GuardedLink";
 import styles from "./navigation.module.scss";
 
 const navigationLinks = [
@@ -13,9 +12,9 @@ export function MobileNavigation() {
   return (
     <nav aria-label="Mobile navigation" className={styles.mobileNavigation}>
       {navigationLinks.map((link) => (
-        <Link className={styles.mobileNavigationLink} href={link.href} key={link.href}>
+        <GuardedLink className={styles.mobileNavigationLink} href={link.href} key={link.href}>
           {link.label}
-        </Link>
+        </GuardedLink>
       ))}
     </nav>
   );

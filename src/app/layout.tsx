@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 
 import { MobileNavigation } from "@/components/navigation/MobileNavigation";
 import { SiteHeader } from "@/components/navigation/SiteHeader";
+import { UnsavedChangesProvider } from "@/components/navigation/UnsavedChangesProvider";
 import navigationStyles from "@/components/navigation/navigation.module.scss";
 import { getCurrentSession } from "@/server/auth/session";
 
@@ -53,9 +54,11 @@ export default async function RootLayout({
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
-        <SiteHeader viewer={viewer} />
-        <div className={navigationStyles.appFrame}>{children}</div>
-        <MobileNavigation />
+        <UnsavedChangesProvider>
+          <SiteHeader viewer={viewer} />
+          <div className={navigationStyles.appFrame}>{children}</div>
+          <MobileNavigation />
+        </UnsavedChangesProvider>
       </body>
     </html>
   );

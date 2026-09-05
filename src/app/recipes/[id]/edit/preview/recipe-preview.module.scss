@@ -1,5 +1,19 @@
+@use "../recipe-editor-buttons" as buttons;
+
+@include buttons.variants;
+
 .page {
   width: min(100%, 52rem);
+}
+
+.description {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.yield {
+  overflow-wrap: anywhere;
+  font-weight: 800;
 }
 
 .eyebrow,
@@ -32,7 +46,8 @@
   font-weight: 800;
 }
 
-.choiceControl {
+.choiceControl,
+.visibilityControl {
   display: flex;
   min-height: 44px;
   gap: 0.65rem;
@@ -40,15 +55,27 @@
   overflow-wrap: anywhere;
 }
 
-.choiceControl input {
+.choiceControl input,
+.visibilityControl input {
   width: 1.25rem;
   height: 1.25rem;
   flex: 0 0 auto;
 }
 
+.visibilityControl {
+  width: fit-content;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.visibilityControl input {
+  accent-color: var(--color-accent);
+}
+
 .choiceGroup button,
 .notice button {
   min-height: 44px;
+  padding: 0.55rem 0.8rem;
   justify-self: start;
 }
 

@@ -22,6 +22,16 @@ export default async function RecipePreviewPage({ params }: { params: Promise<{ 
       <header>
         <p className={styles.eyebrow}>Owner draft preview</p>
         <h1>{preview.recipe.title}</h1>
+        {preview.recipe.description ? (
+          <p className={styles.description}>{preview.recipe.description}</p>
+        ) : null}
+        {preview.recipe.yieldMin !== null ? (
+          <p className={styles.yield}>
+            Yield: {preview.recipe.yieldMin}
+            {preview.recipe.yieldMax !== null ? `–${preview.recipe.yieldMax}` : ""}{" "}
+            {preview.recipe.yieldUnit}
+          </p>
+        ) : null}
         <p>Try ingredient choices without changing the authored recipe.</p>
       </header>
       <RecipeEditNavigation currentStage="preview" recipeId={preview.recipe.id} />

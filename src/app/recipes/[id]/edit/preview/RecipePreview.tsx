@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 
 import {
   resolveRecipeAlternatives,
@@ -15,6 +16,7 @@ export function RecipePreview({ content }: { content: RecipeAlternativeContent }
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [hideUnused, setHideUnused] = useState(false);
   const choiceOptionIds = searchParams.getAll("choice");
   const optionalIngredientIds = searchParams.getAll("optional");
   const resolved = resolveRecipeAlternatives(content, {
@@ -22,6 +24,12 @@ export function RecipePreview({ content }: { content: RecipeAlternativeContent }
     optionalIngredientIds,
   });
   const lineById = new Map(resolved.ingredients.map((line) => [line.id, line]));
+  // Filter only the content lists. Choices stay available, and unresolved branches
+  // remain visible until a selection determines whether they apply.
+  const visibleIngredients = resolved.ingredients.filter(
+    (line) => !hideUnused || line.state !== "inactive",
+  );
+  const visibleSteps = resolved.steps.filter((step) => !hideUnused || step.state !== "inactive");
 
   function navigate(choiceIds: string[], optionalIds: string[]) {
     const next = new URLSearchParams(searchParams.toString());
@@ -50,10 +58,20 @@ export function RecipePreview({ content }: { content: RecipeAlternativeContent }
 
   return (
     <div className={styles.preview}>
+      <label className={styles.visibilityControl}>
+        <input
+          aria-controls="preview-ingredient-content preview-instruction-content"
+          checked={hideUnused}
+          onChange={(event) => setHideUnused(event.target.checked)}
+          type="checkbox"
+        />
+        Hide unused ingredients and steps
+      </label>
       {resolved.invalidSelectionIds.length > 0 ? (
         <div className={styles.notice} role="status">
           <p>Some URL choices were invalid or no longer belong to this recipe and were ignored.</p>
           <button
+            className={styles.secondaryAction}
             onClick={() =>
               navigate(
                 Object.values(resolved.selectedChoiceByGroup),
@@ -90,6 +108,7 @@ export function RecipePreview({ content }: { content: RecipeAlternativeContent }
                 </label>
               ))}
               <button
+                className={styles.secondaryAction}
                 aria-label={`Clear ${group.label} choice`}
                 disabled={!resolved.selectedChoiceByGroup[group.id]}
                 onClick={() => choose(group.id, null)}
@@ -114,10 +133,14 @@ export function RecipePreview({ content }: { content: RecipeAlternativeContent }
           ))}
       </section>
 
-      <section aria-labelledby="preview-ingredients">
+      <section aria-labelledby="preview-ingredients" id="preview-ingredient-content">
         <h2 id="preview-ingredients">Ingredients</h2>
+        {resolved.ingredients.length > 0 && visibleIngredients.length === 0 ? (
+          <p>No ingredients apply to the current selections.</p>
+        ) : null}
         {content.sections.map((section) => {
-          const sectionLines = resolved.ingredients.filter((line) => line.sectionId === section.id);
+          const sectionLines = visibleIngredients.filter((line) => line.sectionId === section.id);
+          if (hideUnused && sectionLines.length === 0) return null;
           return (
             <section className={styles.ingredientSection} key={section.id}>
               {section.name ? <h3>{section.name}</h3> : null}
@@ -136,11 +159,14 @@ export function RecipePreview({ content }: { content: RecipeAlternativeContent }
         })}
       </section>
 
-      <section aria-labelledby="preview-instructions">
+      <section aria-labelledby="preview-instructions" id="preview-instruction-content">
         <h2 id="preview-instructions">Instructions</h2>
         {resolved.steps.length === 0 ? <p>No instructions yet.</p> : null}
+        {resolved.steps.length > 0 && visibleSteps.length === 0 ? (
+          <p>No steps apply to the current selections.</p>
+        ) : null}
         <ol className={styles.instructionList}>
-          {resolved.steps.map((step) => (
+          {visibleSteps.map((step) => (
             <li className={stateClass(step.state)} key={step.id}>
               <p className={styles.stepHeading}>
                 {step.activeNumber ? `Step ${step.activeNumber}` : "Not in active steps"}

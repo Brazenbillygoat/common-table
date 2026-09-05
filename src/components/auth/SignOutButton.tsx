@@ -1,21 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+
+import { useUnsavedChanges } from "@/components/navigation/UnsavedChangesProvider";
 
 import { authClient } from "./auth-client";
 import styles from "./auth-controls.module.scss";
 
 export function SignOutButton() {
   const router = useRouter();
+  const { confirmDeparture } = useUnsavedChanges();
+  const pendingRequest = useRef(false);
   const [isPending, setIsPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function handleSignOut() {
-    if (isPending) {
+    if (pendingRequest.current || !confirmDeparture()) {
       return;
     }
 
+    pendingRequest.current = true;
     setIsPending(true);
     setErrorMessage(null);
 
@@ -32,6 +37,7 @@ export function SignOutButton() {
     } catch {
       setErrorMessage("Unable to sign out. Try again.");
     } finally {
+      pendingRequest.current = false;
       setIsPending(false);
     }
   }
