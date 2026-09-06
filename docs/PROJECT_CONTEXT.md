@@ -212,8 +212,8 @@ publication timestamp in the new pagination fixture. Only fixture-owned data
 was changed. Database and independent Kilo review results are recorded against
 the exact candidate in the external Control task outcome at
 `C:\Users\hyrum\.ai-engineering\control-runtime\operations\common-table\recipe-search\OUTCOME.md`.
-Owner browser/runtime and visual acceptance remains outstanding; the active
-plan is retained until accepted completion.
+Hyrum accepted the recipe-search implementation and automatic-search follow-up
+on 2026-09-06. The reviewed candidate was fast-forwarded into local `main`.
 
 The automatic-search follow-up passed 53 focused controls, Browse, redirect,
 URL and server-search tests, TypeScript, changed-file lint/format, the production
@@ -221,7 +221,9 @@ build, and diff whitespace checks. These cover the 500 ms debounce, immediate
 clears/removals/sorting, preserved input focus and drafts, overlapping requests,
 Back/link navigation, and composition input. Prior PostgreSQL verification
 remains applicable because publication, matching, queries and fixtures are
-unchanged. Owner runtime and visual acceptance remains outstanding.
+unchanged. Owner runtime and visual acceptance is complete, and the active plan
+has been retired. Compact outcome and cleanup records remain at the external
+Control task path above.
 
 ## Documentation roles
 
