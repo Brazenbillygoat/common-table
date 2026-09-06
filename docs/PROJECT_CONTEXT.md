@@ -199,17 +199,18 @@ The Preview visibility follow-up passed 14 focused Preview/resolver tests,
 TypeScript, Sass compilation, and changed-file lint/format checks. Prior
 verification remains applicable to unchanged application behavior.
 
-## Documentation roles
-
 The recipe-search candidate was checked on 2026-09-06: formatting, lint,
 TypeScript, all 388 unit/component/API tests in 50 files, the production build,
-and `git diff --check` passed. The first required PostgreSQL run could not
-connect because Docker Desktop/PostgreSQL was stopped; no fixture was created.
-The latest database and independent Kilo review results are recorded against
+and `git diff --check` passed. All nine required PostgreSQL search/publication
+integration tests passed after starting the database and correcting a missing
+publication timestamp in the new pagination fixture. Only fixture-owned data
+was changed. Database and independent Kilo review results are recorded against
 the exact candidate in the external Control task outcome at
 `C:\Users\hyrum\.ai-engineering\control-runtime\operations\common-table\recipe-search\OUTCOME.md`.
 Owner browser/runtime and visual acceptance remains outstanding; the active
 plan is retained until accepted completion.
+
+## Documentation roles
 
 - `AGENTS.md`: concise operating and engineering rules.
 - `docs/PROJECT_CONTEXT.md`: durable current product and architecture facts.

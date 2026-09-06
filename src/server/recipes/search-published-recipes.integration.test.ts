@@ -146,6 +146,7 @@ describe("published recipe search PostgreSQL integration", () => {
         slug: `search-${id}`,
         title: "Private paging title",
         status: index === 26 ? ("draft" as const) : ("published" as const),
+        publishedAt: index === 26 ? null : timestamp,
       })),
     );
     await db.insert(recipePublication).values(
