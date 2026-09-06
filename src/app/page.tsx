@@ -27,7 +27,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
     <main className="page-shell" id="main-content">
       <h1>Browse recipes</h1>
       <p>Find something to cook, shared from our kitchens.</p>
-      <SearchControls key={searchParametersHref(parameters)} parameters={parameters} />
+      <SearchControls parameters={parameters} />
       {!result ? (
         <div role="alert">
           <p>Recipes could not be loaded. Please try again.</p>

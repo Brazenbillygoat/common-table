@@ -89,8 +89,13 @@ The repository currently provides:
   explicitly published. Public reads require both published status and a valid
   snapshot and never fall back to editable rows.
 - Browse at `/` combines public text search, include/exclude ingredient terms,
-  removable draft filter pills, relevance/newest sorting, and 20 valid results
-  per page. Search explicitly applies controls through a fresh GET request.
+  removable filter pills, relevance/newest sorting, and 20 valid results
+  per page. Typing applies after a 500 ms pause; pill removal, clearing, and
+  sorting apply immediately through client navigation to fresh server results.
+  Enter/Search is an optional immediate flush. Controls stay mounted, preserving
+  input focus/caret and newer drafts while responses arrive. Back and explicit
+  navigation cancel queued typing and restore the URL's controls; composition
+  input waits for the completed character before searching.
   URL parameters preserve applied state; `/search` redirects supported values
   to Browse, including invalid values that need visible correction. Conditional
   results explain optional omissions and available alternatives; recipe links
@@ -209,6 +214,14 @@ the exact candidate in the external Control task outcome at
 `C:\Users\hyrum\.ai-engineering\control-runtime\operations\common-table\recipe-search\OUTCOME.md`.
 Owner browser/runtime and visual acceptance remains outstanding; the active
 plan is retained until accepted completion.
+
+The automatic-search follow-up passed 53 focused controls, Browse, redirect,
+URL and server-search tests, TypeScript, changed-file lint/format, the production
+build, and diff whitespace checks. These cover the 500 ms debounce, immediate
+clears/removals/sorting, preserved input focus and drafts, overlapping requests,
+Back/link navigation, and composition input. Prior PostgreSQL verification
+remains applicable because publication, matching, queries and fixtures are
+unchanged. Owner runtime and visual acceptance remains outstanding.
 
 ## Documentation roles
 

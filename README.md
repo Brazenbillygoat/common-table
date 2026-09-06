@@ -17,10 +17,13 @@ are still in development.
 
 ## Find a recipe
 
-Enter search words and comma-separated ingredient terms on Browse, then press
-Search to apply the controls. Remove a filter pill and press Search to apply
-that change. Applied searches live in the URL for refresh, sharing, pagination,
-and browser Back. Existing `/search` links redirect to Browse.
+Enter search words and comma-separated ingredient terms on Browse. Results
+update after a 500 ms pause in typing. Removing a pill, clearing a field or all
+filters, and changing sort update results immediately. Enter or Search can
+apply pending typing immediately; neither is required. Search updates preserve
+your input focus and cursor position. Applied searches live in the URL for
+refresh, sharing, pagination, and browser Back. Existing `/search` links redirect
+to Browse.
 
 Matching is case-insensitive and partial: butter matches salted butter and
 peanut butter. Every included term must match an ingredient remaining after

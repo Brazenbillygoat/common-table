@@ -1,20 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
-import Link from "next/link";
+import { useRef } from "react";
 import { SEARCH_LIMITS, type SearchParameters } from "@/utils/recipe-search-query";
 import styles from "./search.module.scss";
-
-const inputValue = (value: string | string[] | undefined) =>
-  Array.isArray(value) ? value.join(", ") : (value ?? "");
+import { useRecipeSearchNavigation } from "./useRecipeSearchNavigation";
 
 export function SearchControls({ parameters }: { parameters: SearchParameters }) {
-  const [include, setInclude] = useState(inputValue(parameters.include));
-  const [exclude, setExclude] = useState(inputValue(parameters.exclude));
+  const search = useRecipeSearchNavigation(parameters);
   const includeInput = useRef<HTMLInputElement>(null);
   const excludeInput = useRef<HTMLInputElement>(null);
-  const initialSort =
-    inputValue(parameters.sort) || (inputValue(parameters.q).trim() ? "relevance" : "newest");
   return (
     <form
       action="/"
@@ -23,20 +17,33 @@ export function SearchControls({ parameters }: { parameters: SearchParameters })
       className={styles.controls}
       aria-label="Recipe search"
       aria-describedby="ingredient-matching search-apply"
+      onSubmit={(event) => {
+        event.preventDefault();
+        search.submit();
+      }}
+      onKeyDown={(event) => {
+        if (
+          event.key === "Enter" &&
+          (search.isComposing() || event.nativeEvent.isComposing || event.keyCode === 229)
+        )
+          event.preventDefault();
+      }}
     >
       <label htmlFor="recipe-query">Search recipes</label>
       <input
         id="recipe-query"
         name="q"
         type="search"
-        defaultValue={inputValue(parameters.q)}
+        value={search.fields.q}
+        onChange={(event) => search.changeText("q", event.target.value)}
+        onCompositionStart={search.compositionStart}
+        onCompositionEnd={(event) => search.compositionEnd("q", event.currentTarget.value)}
         maxLength={SEARCH_LIMITS.query}
         placeholder="Title, description, or ingredient"
       />
       <div className={styles.filters}>
         {(["include", "exclude"] as const).map((kind) => {
-          const value = kind === "include" ? include : exclude;
-          const setValue = kind === "include" ? setInclude : setExclude;
+          const value = search.fields[kind];
           const input = kind === "include" ? includeInput : excludeInput;
           return (
             <div key={kind}>
@@ -48,7 +55,9 @@ export function SearchControls({ parameters }: { parameters: SearchParameters })
                 id={`recipe-${kind}`}
                 name={kind}
                 value={value}
-                onChange={(event) => setValue(event.target.value)}
+                onChange={(event) => search.changeText(kind, event.target.value)}
+                onCompositionStart={search.compositionStart}
+                onCompositionEnd={(event) => search.compositionEnd(kind, event.currentTarget.value)}
                 maxLength={SEARCH_LIMITS.filterText}
                 aria-describedby="filter-help ingredient-matching"
                 placeholder={kind === "include" ? "chicken, tofu" : "butter"}
@@ -64,12 +73,7 @@ export function SearchControls({ parameters }: { parameters: SearchParameters })
                         type="button"
                         aria-label={`Remove ${kind} ${term.trim()}`}
                         onClick={() => {
-                          setValue(
-                            value
-                              .split(",")
-                              .filter((_, item) => item !== index)
-                              .join(","),
-                          );
+                          search.removeTerm(kind, index);
                           input.current?.focus();
                         }}
                       >
@@ -93,9 +97,14 @@ export function SearchControls({ parameters }: { parameters: SearchParameters })
       </p>
       <div className={styles.actions}>
         <label htmlFor="recipe-sort">Sort by</label>
-        <select id="recipe-sort" name="sort" defaultValue={initialSort}>
-          {initialSort !== "relevance" && initialSort !== "newest" ? (
-            <option value={initialSort}>Choose a valid sort</option>
+        <select
+          id="recipe-sort"
+          name="sort"
+          value={search.fields.sort}
+          onChange={(event) => search.changeSort(event.target.value)}
+        >
+          {search.fields.sort !== "relevance" && search.fields.sort !== "newest" ? (
+            <option value={search.fields.sort}>Choose a valid sort</option>
           ) : null}
           <option value="relevance">Relevance</option>
           <option value="newest">Newest</option>
@@ -103,11 +112,12 @@ export function SearchControls({ parameters }: { parameters: SearchParameters })
         <button type="submit" className={styles.submit}>
           Search
         </button>
-        <Link href="/" prefetch={false}>
+        <button type="button" className={styles.clear} onClick={search.clear}>
           Clear search and filters
-        </Link>
+        </button>
       </div>
-      <p id="search-apply">Press Search to apply your terms, removed filters, and sorting.</p>
+      <p id="search-apply">Results update automatically. Press Enter or Search to update now.</p>
+      {search.isPending ? <p role="status">Updating recipes…</p> : null}
     </form>
   );
 }

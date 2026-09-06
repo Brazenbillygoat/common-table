@@ -3,7 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseRecipeSearch, type SearchParameters } from "@/utils/recipe-search-query";
 import Home from "./page";
 
-const mocks = vi.hoisted(() => ({ search: vi.fn(), connection: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  search: vi.fn(),
+  connection: vi.fn(),
+  push: vi.fn(),
+  refresh: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
+}));
 vi.mock("next/server", () => ({ connection: mocks.connection }));
 vi.mock("@/server/recipes/search-published-recipes", () => ({
   searchPublishedRecipes: mocks.search,
@@ -106,10 +114,7 @@ describe("Browse recipe search", () => {
   it("retains controls and clear action in empty searches", async () => {
     render(await Home({ searchParams: Promise.resolve({ include: "nowhere" }) }));
     expect(screen.getByText(/No recipes match/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Clear search and filters" })).toHaveAttribute(
-      "href",
-      "/",
-    );
+    expect(screen.getByRole("button", { name: "Clear search and filters" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Include ingredients" })).toHaveValue("nowhere");
   });
   it("restores control values when URL state changes and returns through Back", async () => {
