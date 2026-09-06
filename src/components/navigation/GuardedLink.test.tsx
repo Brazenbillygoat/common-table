@@ -141,7 +141,7 @@ describe("unsaved-changes navigation", () => {
       fireEvent.click(link);
     }
 
-    expect(confirm).toHaveBeenCalledTimes(10);
+    expect(confirm).toHaveBeenCalledTimes(8);
     expect(router.push).not.toHaveBeenCalled();
   });
 

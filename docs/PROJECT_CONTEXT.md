@@ -1,6 +1,6 @@
 # Common Table project context
 
-Last reviewed against the repository: 2026-09-04
+Last reviewed against the repository: 2026-09-06
 
 ## Product
 
@@ -88,8 +88,14 @@ The repository currently provides:
   values and resolved ingredient/unit names. Owner edits remain private until
   explicitly published. Public reads require both published status and a valid
   snapshot and never fall back to editable rows.
-- Browse at `/` lists 20 valid published recipes per page, ordered by latest
-  publication then recipe identity. `/r/[slug]` serves published content and
+- Browse at `/` combines public text search, include/exclude ingredient terms,
+  removable draft filter pills, relevance/newest sorting, and 20 valid results
+  per page. Search explicitly applies controls through a fresh GET request.
+  URL parameters preserve applied state; `/search` redirects supported values
+  to Browse, including invalid values that need visible correction. Conditional
+  results explain optional omissions and available alternatives; recipe links
+  carry no preselected cooking choices. Empty searches browse newest.
+  `/r/[slug]` serves published content and
   metadata with fresh server reads. Metadata and body share one request read.
   Native History API choice changes preserve the loaded recipe during cooking;
   refresh or a new visit retrieves the latest publication. Existing loaded
@@ -99,7 +105,7 @@ The repository currently provides:
 - Vitest, Testing Library, ESLint, Prettier, TypeScript, build, and opt-in
   PostgreSQL integration checks.
 
-Not implemented: recipe deletion, photo storage, production search and dietary derivation,
+Not implemented: recipe deletion, photo storage, dietary derivation,
 meal-plan generation, administrator reference-data UI, production hosting, or
 final icons.
 
@@ -141,9 +147,18 @@ Migration `0002_icy_ogun.sql` adds publication storage without publishing or
 rewriting authoring data. It fails before schema changes if the previous schema
 contains published rows requiring reconciliation.
 
-PostgreSQL full-text search, `pg_trgm`, and `unaccent` are the planned MVP search
-foundation. Search state belongs in URL parameters and ranking must remain
-deterministic.
+Search reads the small published collection in one fresh server query, requires
+published status and valid supported snapshots matching recipe identity, and
+uses shared pure TypeScript matching/URL utilities. It never searches editable
+rows or current reference labels. Matching is case-insensitive partial text;
+any search word may match. Relevance orders distinct matched words, then title,
+ingredient, and description counts, then publication date descending and recipe
+identity ascending. Filtering/ranking precede pagination. Every included term
+matches a surviving ingredient independently, even across mutually exclusive
+alternatives. Exclusions reject mandatory standalone occurrences and groups with
+no allowed option; optional occurrences may be omitted. No substitution solver,
+dietary assurances, database-specific search extension, schema change, or offline
+recipe storage is part of this search implementation.
 
 ## Security and product constraints
 
@@ -185,6 +200,16 @@ TypeScript, Sass compilation, and changed-file lint/format checks. Prior
 verification remains applicable to unchanged application behavior.
 
 ## Documentation roles
+
+The recipe-search candidate was checked on 2026-09-06: formatting, lint,
+TypeScript, all 388 unit/component/API tests in 50 files, the production build,
+and `git diff --check` passed. The first required PostgreSQL run could not
+connect because Docker Desktop/PostgreSQL was stopped; no fixture was created.
+The latest database and independent Kilo review results are recorded against
+the exact candidate in the external Control task outcome at
+`C:\Users\hyrum\.ai-engineering\control-runtime\operations\common-table\recipe-search\OUTCOME.md`.
+Owner browser/runtime and visual acceptance remains outstanding; the active
+plan is retained until accepted completion.
 
 - `AGENTS.md`: concise operating and engineering rules.
 - `docs/PROJECT_CONTEXT.md`: durable current product and architecture facts.

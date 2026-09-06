@@ -3,7 +3,6 @@ import styles from "./navigation.module.scss";
 
 const navigationLinks = [
   { href: "/", label: "Browse" },
-  { href: "/search", label: "Search" },
   { href: "/meal-plans", label: "Meal Plan" },
   { href: "/recipes", label: "Recipes" },
 ];

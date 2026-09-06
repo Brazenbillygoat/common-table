@@ -12,7 +12,6 @@ type SiteHeaderProps = {
 
 const primaryLinks = [
   { href: "/", label: "Browse" },
-  { href: "/search", label: "Search" },
   { href: "/meal-plans", label: "Meal Plan" },
   { href: "/recipes", label: "My Recipes" },
 ];

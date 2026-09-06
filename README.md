@@ -9,9 +9,33 @@ their own recipes. Meal plans remain private to their owner.
 Repository: [github.com/Brazenbillygoat/common-table](https://github.com/Brazenbillygoat/common-table)
 
 The application supports owner-controlled recipe authoring, ingredient
-alternatives, conditional instructions, and publishing. Browse lists public
-recipes; each public recipe supports cooking choices and hiding unused content.
-Search, filters, photos, and meal planning are still in development.
+alternatives, conditional instructions, and publishing. Browse searches public
+recipes by title, description, and ingredient names, with include/exclude
+filters, relevance/newest sorting, and 20 results per page. Each public recipe
+supports cooking choices and hiding unused content. Photos and meal planning
+are still in development.
+
+## Find a recipe
+
+Enter search words and comma-separated ingredient terms on Browse, then press
+Search to apply the controls. Remove a filter pill and press Search to apply
+that change. Applied searches live in the URL for refresh, sharing, pagination,
+and browser Back. Existing `/search` links redirect to Browse.
+
+Matching is case-insensitive and partial: butter matches salted butter and
+peanut butter. Every included term must match an ingredient remaining after
+exclusions; included ingredients may be mutually exclusive alternatives.
+Excluded required ingredients reject a recipe unless an allowed alternative
+remains in their choice group. Optional excluded ingredients can be omitted.
+Conditional results explain the necessary omissions or available alternatives.
+These are text filters, not dietary or allergen assurances. Recipe links open
+normally; review and make cooking choices on the recipe page.
+
+Search matches any entered word. Relevance ranks distinct word coverage first,
+then title, ingredient, and description matches; publication date and recipe
+identity break ties. Empty searches browse newest. Only valid published
+snapshots are searched, so unpublished edits remain private. Search requires
+an online database connection; no offline recipe storage is included.
 
 ## Publish a recipe
 

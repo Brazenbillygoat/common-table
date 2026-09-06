@@ -26,6 +26,7 @@ describe("SiteHeader", () => {
     expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "My Recipes" })).toHaveAttribute("href", "/recipes");
     expect(screen.queryByRole("link", { name: "Create Recipe" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Search" })).not.toBeInTheDocument();
   });
 
   it("shows only the signed-in display name, theme control, and sign-out control", async () => {
@@ -43,11 +44,13 @@ describe("SiteHeader", () => {
     expect(screen.queryByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
   });
 
-  it("keeps four mobile destinations and replaces Create with Recipes", () => {
+  it("combines search into Browse across three mobile destinations", () => {
     render(<MobileNavigation />);
 
     expect(screen.getByRole("navigation", { name: "Mobile navigation" })).toBeInTheDocument();
-    expect(screen.getAllByRole("link")).toHaveLength(4);
+    expect(screen.getAllByRole("link")).toHaveLength(3);
+    expect(screen.getByRole("link", { name: "Browse" })).toHaveAttribute("href", "/");
+    expect(screen.queryByRole("link", { name: "Search" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Recipes" })).toHaveAttribute("href", "/recipes");
     expect(screen.queryByRole("link", { name: "Create" })).not.toBeInTheDocument();
   });
