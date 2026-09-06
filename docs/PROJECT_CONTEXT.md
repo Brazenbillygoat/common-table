@@ -12,6 +12,36 @@ offline synchronization.
 
 It is not a social network, AI product, pantry tracker, or native application.
 
+## Future direction
+
+Planned direction agreed on 2026-09-06. This is not implemented functionality
+or an active implementation plan.
+
+- Keep Common Table a free personal hobby app. Target Hyrum's account and phone
+  for the first mobile release, with possible family use later. Install the
+  existing PWA on the home screen without a native build or App Store release.
+- Prioritize basic recipe search before the first mobile release, including
+  searching the recipe data available offline.
+- Host the application and PostgreSQL remotely so everyday phone use never
+  requires Hyrum's PC or Docker to be running. Target $0 ongoing cost with a
+  provider-issued free web address. Vercel Hobby and Neon Free are proposed
+  providers; confirm their free-tier limits before setup. Docker is optional
+  for local development; a separate free hosted development database is another
+  option.
+- Store the app files and a complete copy of the synchronized recipe data on
+  the phone. Offline use supports browsing, searching, and cooking from the
+  latest successful sync, with a visible last-sync time. Recipe writes are
+  disabled offline; there are no queued offline edits to merge later. This is
+  deliberate local storage and synchronization, not just previously visited
+  page caching.
+- Refresh the local recipe copy when connectivity returns while the app is
+  open, or on the next online opening. Preserve the previous complete copy if
+  a sync fails. Closed-app background synchronization is not required.
+- Continue developing on the PC and deploying the same application. The
+  installed phone app receives deployed code updates when online. Verify
+  offline reopening, reconnection, and app updates on Hyrum's phone before
+  considering the mobile release ready.
+
 ## Current implementation
 
 The repository currently provides:
