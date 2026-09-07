@@ -1,6 +1,8 @@
+import { resolveAuthUrl } from "../src/server/auth/url";
+
 const databaseUrl = process.env.DATABASE_URL;
 const authSecret = process.env.BETTER_AUTH_SECRET;
-const authUrl = process.env.BETTER_AUTH_URL;
+const authUrl = resolveAuthUrl();
 
 const errors: string[] = [];
 
@@ -17,16 +19,16 @@ if (!authSecret || authSecret.length < 32) {
 }
 
 if (!authUrl) {
-  errors.push("BETTER_AUTH_URL is missing.");
+  errors.push("Set BETTER_AUTH_URL or expose VERCEL_PROJECT_PRODUCTION_URL on Vercel.");
 } else {
   try {
     const url = new URL(authUrl);
 
     if (url.protocol !== "https:") {
-      errors.push("BETTER_AUTH_URL must use HTTPS in production.");
+      errors.push("The resolved authentication URL must use HTTPS in production.");
     }
   } catch {
-    errors.push("BETTER_AUTH_URL is not a valid URL.");
+    errors.push("The resolved authentication URL is not a valid URL.");
   }
 }
 

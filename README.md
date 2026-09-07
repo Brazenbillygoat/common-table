@@ -87,6 +87,26 @@ The publication migration preserves drafts and does not publish recipes. If an
 older database contains records already marked published without snapshots,
 the migration stops for explicit reconciliation before upgrade.
 
+### Production authentication on Vercel
+
+Set `DATABASE_URL` to the hosted database's pooled connection string and
+`BETTER_AUTH_SECRET` to a new random secret of at least 32 characters. Scope
+these credentials to Production; Preview needs separate credentials and setup.
+The `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables are only
+used by local Docker.
+
+Omit `BETTER_AUTH_URL` on Vercel to use `https://` plus the assigned
+`VERCEL_PROJECT_PRODUCTION_URL`. Keep access to Vercel's system environment
+variables enabled. An explicit `BETTER_AUTH_URL` takes precedence, so local
+development can continue using `http://localhost:3000`. The fallback uses the
+stable production address; it does not enable sign-in on Preview addresses.
+Vercel documents the hostname in its
+[system environment variables reference](https://vercel.com/docs/environment-variables/system-environment-variables#vercel_project_production_url).
+
+With production values supplied to the process, run
+`npm.cmd run env:check:production` before deploying. This checks configuration
+without connecting to the database; it is not automatically run by the build.
+
 ## Create an account
 
 Public registration is disabled. Create accounts from PowerShell after the

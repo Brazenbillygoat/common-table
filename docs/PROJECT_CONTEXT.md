@@ -50,7 +50,11 @@ The repository currently provides:
 - PostgreSQL 18 through Docker Compose, Drizzle ORM, committed SQL migrations,
   and idempotent reference-data seeding.
 - Better Auth email/password sessions with public sign-up disabled and the
-  admin plugin available for managed accounts.
+  admin plugin available for managed accounts. Auth initialization and the
+  production environment checker share URL resolution: explicit `BETTER_AUTH_URL`
+  takes precedence, otherwise `VERCEL_PROJECT_PRODUCTION_URL` supplies the stable
+  HTTPS production address. Configuration still fails when both are missing;
+  Preview sign-in needs an explicit Preview URL and separate credentials.
 - A responsive server-rendered shell, public search foundation, sign-in and
   sign-out, private recipe and meal-plan boundaries, and light/dark theming.
 - Owner-scoped draft creation and a My Recipes workspace listing drafts and
