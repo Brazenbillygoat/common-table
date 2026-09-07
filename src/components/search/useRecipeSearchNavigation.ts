@@ -29,7 +29,10 @@ function fieldsHref(fields: SearchFields) {
   });
 }
 
-export function useRecipeSearchNavigation(parameters: SearchParameters) {
+export function useRecipeSearchNavigation(
+  parameters: SearchParameters,
+  navigate?: (href: string) => void,
+) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -134,7 +137,9 @@ export function useRecipeSearchNavigation(parameters: SearchParameters) {
     // Same-URL navigation refreshes this dynamic page too and, unlike refresh(),
     // supersedes any pending navigation, including a slow Back or Browse request.
     startTransition(() => {
-      router.push(href, { scroll: false });
+      if (navigate) navigate(href);
+      else if (!navigator.onLine) window.location.assign(href);
+      else router.push(href, { scroll: false });
     });
   }
 
