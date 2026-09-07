@@ -36,18 +36,33 @@ describe("atomic device collection", () => {
     );
     expect(await readCollection()).toEqual(second);
   });
-  it("preserves the complete prior copy when a storage write throws or aborts", async () => {
-    const first = await collection("First");
-    await replaceCollection(first, null);
-    const spy = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(() => {
-      throw new DOMException("Full", "QuotaExceededError");
-    });
-    await expect(replaceCollection(await collection("Second"), first.token)).rejects.toThrow(
-      "device space",
-    );
-    spy.mockRestore();
-    expect(await readCollection()).toEqual(first);
-  });
+  it.each(["QuotaExceededError", "UnknownError", "DataCloneError"])(
+    "preserves the prior copy and reports %s honestly",
+    async (name) => {
+      const first = await collection("First");
+      await replaceCollection(first, null);
+      const spy = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(() => {
+        throw new DOMException("Storage write failed", name);
+      });
+      await expect(replaceCollection(await collection("Second"), first.token)).rejects.toThrow(
+        name === "QuotaExceededError" ? "device space" : "Your saved recipes have not changed",
+      );
+      spy.mockRestore();
+      expect(await readCollection()).toEqual(first);
+    },
+  );
+  it.each(["QuotaExceededError", "UnknownError"])(
+    "does not misreport a consent write %s as another-page conflict",
+    async (name) => {
+      vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(() => {
+        throw new DOMException("Storage write failed", name);
+      });
+      await expect(allowAppDownload(null)).rejects.toThrow(
+        name === "QuotaExceededError" ? "device space" : "Could not save the download",
+      );
+      expect(await readCollection()).toBeNull();
+    },
+  );
   it("removal invalidates even a first-time download already running in another page", async () => {
     await removeCollection();
     await expect(allowAppDownload(null)).rejects.toThrow("another page");

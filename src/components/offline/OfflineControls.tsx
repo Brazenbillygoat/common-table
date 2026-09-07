@@ -21,12 +21,20 @@ import styles from "./offline.module.scss";
 
 const dismissed = new Set<string>();
 const size = (bytes: number) => `${Math.max(1, Math.ceil(bytes / 1024))} KiB`;
+const availabilityText = {
+  checking: "Checking saved downloads",
+  empty: "No offline download saved yet",
+  incomplete: "Offline download needs to be completed",
+  ready: "Available offline",
+  unavailable: "Offline availability could not be checked",
+};
 export function OfflineControls() {
   const [collection, setCollection] = useState<OfflineCollection | null>(null);
-  const [ready, setReady] = useState(false);
+  const [availability, setAvailability] = useState<keyof typeof availabilityText>("checking");
+  const [canRemove, setCanRemove] = useState(false);
   const [offer, setOffer] = useState<OfflineManifest | null>(null);
   const [appBytes, setAppBytes] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [activity, setActivity] = useState<"checking" | "downloading" | "removing" | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [removeConfirm, setRemoveConfirm] = useState(false);
@@ -34,13 +42,31 @@ export function OfflineControls() {
   const [updateReady, setUpdateReady] = useState(false);
   const automaticCheckAt = useRef(0);
   const active = useRef(false);
+  const busy = activity !== null;
 
   const refreshStorage = useCallback(async () => {
-    const stored = await readCollection();
-    const filesReady = await appIsReady();
-    setCollection(stored);
-    setReady(filesReady && !!stored);
-    return { stored, filesReady };
+    try {
+      const [stored, filesReady, registration] = await Promise.all([
+        readCollection(),
+        appIsReady(),
+        offlineRegistration(),
+      ]);
+      setCollection(stored);
+      setAvailability(
+        filesReady && stored ? "ready" : stored || registration ? "incomplete" : "empty",
+      );
+      setCanRemove(!!stored || !!registration);
+      return { stored, filesReady };
+    } catch {
+      setAvailability("unavailable");
+      setOffer(null);
+      // Keep reset available even when an invalid or inaccessible saved copy
+      // prevents us from discovering what remains on this device.
+      setCanRemove(true);
+      throw new Error(
+        "Saved downloads could not be read. Try again or remove downloads to reset them.",
+      );
+    }
   }, []);
   const check = useCallback(
     async (manual = false) => {
@@ -48,8 +74,9 @@ export function OfflineControls() {
       if (!manual && Date.now() - automaticCheckAt.current < 30_000) return;
       automaticCheckAt.current = Date.now();
       active.current = true;
-      setBusy(true);
+      setActivity("checking");
       setError("");
+      setMessage("");
       try {
         const { stored, filesReady } = await refreshStorage();
         if (!navigator.onLine) {
@@ -79,13 +106,11 @@ export function OfflineControls() {
         }
       } catch (problem) {
         setError(
-          problem instanceof Error
-            ? problem.message
-            : "Offline storage is unavailable. Retry or remove downloads to reset it.",
+          problem instanceof Error ? problem.message : "Could not check for updates. Try again.",
         );
       } finally {
         active.current = false;
-        setBusy(false);
+        setActivity(null);
       }
     },
     [refreshStorage],
@@ -97,14 +122,11 @@ export function OfflineControls() {
       // Overlapping events still share the in-flight check; there is no polling.
       if (event?.type === "online") automaticCheckAt.current = 0;
       setOffline(!navigator.onLine);
-      void refreshStorage().catch(() => setReady(false));
+      if (!active.current) void refreshStorage().catch(() => {});
       void check();
     }
     function storageChanged() {
-      void refreshStorage().catch(() => {
-        setReady(false);
-        setError("Saved storage is unavailable. Reconnect and retry.");
-      });
+      void refreshStorage().catch((problem: Error) => setError(problem.message));
     }
     function focus() {
       if (document.visibilityState === "visible") connect();
@@ -130,9 +152,9 @@ export function OfflineControls() {
   async function sync() {
     if (!offer || active.current) return;
     active.current = true;
-    setBusy(true);
+    setActivity("downloading");
     setError("");
-    setMessage("Downloading app files and recipes…");
+    setMessage("");
     try {
       await syncPublications(offer);
       await refreshStorage();
@@ -140,6 +162,8 @@ export function OfflineControls() {
       setMessage("Offline download complete.");
     } catch (problem) {
       setMessage("");
+      if (!collection) setAvailability("incomplete");
+      setCanRemove(true);
       setError(problem instanceof Error ? problem.message : "Download failed. Retry.");
       if (problem instanceof RevisionConflict) {
         setOffer(null);
@@ -148,37 +172,51 @@ export function OfflineControls() {
       }
     } finally {
       active.current = false;
-      setBusy(false);
+      setActivity(null);
     }
   }
   async function remove() {
-    setBusy(true);
+    if (active.current) return;
+    active.current = true;
+    setActivity("removing");
     setError("");
+    setMessage("");
     try {
       await removeOfflineDownloads();
       setCollection(null);
-      setReady(false);
+      setAvailability("empty");
+      setCanRemove(false);
+      setUpdateReady(false);
       setOffer(null);
       setRemoveConfirm(false);
       setMessage("Offline downloads removed from this device.");
     } catch {
       setError("Some downloads could not be removed. Close other Common Table pages and retry.");
     } finally {
-      setBusy(false);
+      active.current = false;
+      setActivity(null);
     }
   }
   const difference = offer ? syncDifference(offer, collection) : null;
+  const progress =
+    activity === "checking"
+      ? "Checking for updates…"
+      : activity === "downloading"
+        ? "Downloading recipes and app files…"
+        : activity === "removing"
+          ? "Removing offline downloads…"
+          : message;
   return (
     <section className={styles.controls} aria-label="Offline recipes">
       <h2>Offline recipes</h2>
       <p role="status">
-        {ready ? "Available offline" : "Offline setup incomplete"}
+        {availabilityText[availability]}
         {offline ? " · You are offline" : ""}.
         {collection
-          ? ` Last successful sync: ${new Date(collection.syncedAt).toLocaleString()}.`
-          : " No complete saved collection."}
+          ? ` Last successful download: ${new Date(collection.syncedAt).toLocaleString()}.`
+          : ""}
       </p>
-      {offer && difference ? (
+      {offer && difference && !removeConfirm ? (
         <div className={styles.offer}>
           <p>
             {!collection
@@ -192,8 +230,8 @@ export function OfflineControls() {
               : " App files are already saved."}{" "}
             Transfers include additional metadata.
           </p>
-          <button type="button" onClick={() => void sync()} disabled={busy}>
-            Sync now
+          <button type="button" onClick={() => void sync()} disabled={busy || offline}>
+            Download now
           </button>{" "}
           <button
             type="button"
@@ -201,19 +239,39 @@ export function OfflineControls() {
             onClick={() => {
               dismissed.add(offer.revision);
               setOffer(null);
-              setMessage("Saved recipes kept. Use Sync to check again.");
+              setMessage(
+                collection
+                  ? "Your saved recipes are kept. Check for updates whenever you are ready."
+                  : "You can download later. Choose Check for updates when you are ready.",
+              );
             }}
           >
             Later
           </button>
         </div>
       ) : null}
-      <button type="button" disabled={busy || offline} onClick={() => void check(true)}>
-        Sync
-      </button>{" "}
-      <button type="button" disabled={busy} onClick={() => setRemoveConfirm(true)}>
-        Remove offline downloads
-      </button>
+      {!removeConfirm ? (
+        <>
+          {!offer ? (
+            <button type="button" disabled={busy || offline} onClick={() => void check(true)}>
+              Check for updates
+            </button>
+          ) : null}{" "}
+          {canRemove ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setRemoveConfirm(true);
+                setMessage("");
+                setError("");
+              }}
+            >
+              Remove offline downloads
+            </button>
+          ) : null}
+        </>
+      ) : null}
       {removeConfirm ? (
         <div role="group" aria-label="Confirm removal">
           <p>
@@ -228,26 +286,21 @@ export function OfflineControls() {
           </button>
         </div>
       ) : null}
-      {message ? <p role="status">{message}</p> : null}
-      {error ? (
-        <p role="alert">
-          {error}{" "}
-          <button type="button" disabled={busy || offline} onClick={() => void check(true)}>
-            Retry
-          </button>
-        </p>
-      ) : null}
+      {progress ? <p role="status">{progress}</p> : null}
+      {error ? <p role="alert">{error}</p> : null}
       {updateReady ? (
         <p role="status">
           An app update is ready. Close all Common Table pages, then reopen to use it. Your open
           recipes and unsaved edits stay as they are.
         </p>
       ) : null}
-      <p className={styles.note}>
-        Safari may remove website storage. Downloads are not a permanent backup. If the entire
-        offline app is removed, reconnect to download it again. Editing needs an internet
-        connection.
-      </p>
+      <details className={styles.note}>
+        <summary>About offline downloads</summary>
+        <p>
+          Downloads stay on this device and may be removed by your browser. They are not a permanent
+          backup. Reconnect to download them again if needed. Editing needs an internet connection.
+        </p>
+      </details>
     </section>
   );
 }

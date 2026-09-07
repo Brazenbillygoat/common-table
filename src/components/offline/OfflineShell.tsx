@@ -137,7 +137,7 @@ export function OfflineShell() {
       ) : !collection ? (
         <main className="page-shell" id="main-content">
           <h1>No saved collection</h1>
-          <p>Reconnect and choose Sync now to save all published recipes for offline use.</p>
+          <p>Reconnect and choose Download now to save all published recipes for offline use.</p>
         </main>
       ) : (
         <BrowseContent

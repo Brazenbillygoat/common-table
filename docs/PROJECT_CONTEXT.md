@@ -18,7 +18,7 @@ It is not a social network, pantry tracker, or native application.
 Production is deployed from GitHub `main` to Vercel Hobby, with PostgreSQL on
 Neon Free. Hyrum confirmed public browsing in an incognito window on
 2026-09-06. Everyday hosted use does not depend on the PC or Docker. This
-confirmation does not establish hosted sign-in or phone/offline acceptance.
+confirmation does not establish hosted sign-in acceptance.
 
 The existing durable local data was transferred to Neon and checked against
 the source. The local Docker database remains available for development;
@@ -29,11 +29,18 @@ paid upgrades. Use the provider-issued address; upgrades and paid services
 require separate owner authorization. No application-level usage meter or
 spending cutoff is implemented.
 
-The offline implementation has passed independent review and is integrated into
-local `main` with the reconciled documentation. Hyrum will push `main`, check the
-Vercel deployment, and perform visual and real-iPhone Safari/home-screen
-acceptance. Deployment and phone acceptance are still pending. The approved
-contract remains in `docs/ACTIVE_PLAN.md` until accepted delivery is recorded.
+Hyrum deployed the reviewed offline implementation on 2026-09-07 and confirmed
+the phone works in airplane mode after downloading and loses offline access
+after confirmed removal. Production Vercel Toolbar is Off: its injected code
+previously changed a hashed app asset and prevented setup. A fresh deployment
+without reused build cache restored all asset size/hash matches. Preserve this
+setting and the integrity checks.
+
+The scoped offline UI/error follow-up clarifies consent, empty/removal states
+and failure messages. Hyrum owns its push, deployment and visual/phone check.
+Full Safari/home-screen, reconnection and deployed-app-upgrade acceptance,
+including the actual iOS version, remains pending. The approved contract remains
+in `docs/ACTIVE_PLAN.md` until accepted delivery is recorded.
 
 ## Current implementation
 
@@ -105,7 +112,7 @@ The repository currently provides:
 - Canonical and recipe-owned custom ingredients and units, including numeric,
   ranged, free-form, and omitted quantities.
 - Optional downloads of all public recipes and required anonymous app files,
-  with explicit consent, incremental sync, offline search/cooking, sync status,
+  with explicit consent, incremental sync, offline search/cooking, download status,
   retry, and confirmed removal. Authoring remains online.
 - Vitest, Testing Library, ESLint, Prettier, TypeScript, build, opt-in PostgreSQL
   integration checks, and production-build Chromium/WebKit offline tests.
@@ -190,7 +197,13 @@ App caches are versioned; a prepared worker follows the normal waiting lifecycle
 until old pages close. There is no forced activation or automatic reload. An open
 cooking view keeps its loaded publication and local display state across recipe
 sync/removal. The UI checks both app-file readiness and valid saved recipes,
-shows last-sync time, supports retry/confirmed removal, and explains eviction.
+shows the last successful download time and distinguishes normal empty storage
+from incomplete or unreadable downloads. Check for updates fetches metadata;
+Download now gives consent. Checking, downloading and removal have distinct
+progress messages. Removal confirmation hides competing actions, and browser
+storage guidance is under About offline downloads. Generic install/storage
+failures do not claim a full device; only reported quota errors suggest freeing
+space. Failed recipe writes still preserve the prior complete collection.
 Limits: 1,000 publications, 20 MiB recipe JSON, 256 KiB requests, 25 MiB app files.
 
 ## Security and product constraints
@@ -225,7 +238,7 @@ runtime/configuration scenarios, static checks, and a production build. The
 reviewed commit `ca494594b02cfbede2481b4399ee1e9e7be260ff` was pushed and
 deployed by Hyrum. Public incognito browsing is confirmed.
 
-The offline implementation passed formatting, lint, TypeScript, 424
+The original offline implementation passed formatting, lint, TypeScript, 424
 unit/component/API tests, ten relevant PostgreSQL integration tests, the
 production build, and whitespace checks. Thirty browser tests passed, 15 each
 in Chromium and WebKit, using real service workers, browser storage, and two
@@ -233,9 +246,16 @@ production builds. Independent review accepted the implementation with no
 blocking findings. Documentation reconciliation changed no application code;
 its formatting and the merged source were checked separately.
 
-Real iPhone Safari/home-screen, offline reopen, reconnection, and deployed app
-update acceptance remain pending. Record the actual iOS version and Hyrum's
-results after deployment; automated checks do not establish those outcomes.
+The offline UI/error follow-up passed 15 focused component/storage/protocol
+tests and all 34 browser scenarios across Chromium/WebKit, including altered
+host assets, quota versus other storage failures, consent and removal. Both
+production builds and the relevant formatting/lint/type/whitespace checks passed.
+
+Hyrum confirmed the deployed phone download/airplane-mode/removal flow on
+2026-09-07 after disabling the Production Vercel Toolbar and redeploying.
+Record the actual iOS version and remaining Safari/home-screen, reconnection,
+deployed app update and follow-up UI results; automated checks do not establish
+those outcomes.
 
 Use change-scoped verification for each new task. Keep detailed task evidence
 and completed outcomes in the local task records rather than accumulating

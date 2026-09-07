@@ -19,4 +19,10 @@
 }
 .note {
   font-size: 0.9rem;
+  margin-block-start: 1rem;
+  summary {
+    min-height: 44px;
+    align-content: center;
+    cursor: pointer;
+  }
 }

@@ -34,7 +34,7 @@ let preparing;
 function prepare() {
   preparing ??= (async () => {
     const token = await consent();
-    if (!token) throw new Error("Choose Sync now before downloading app files.");
+    if (!token) throw new Error("Choose Download now before downloading app files.");
     const cache = await caches.open(CACHE);
     try {
       // Never overwrite a complete version during recovery. Only missing files
@@ -147,7 +147,7 @@ self.addEventListener("fetch", (event) => {
         if (shell) return shell;
       }
       return new Response(
-        "Offline setup is incomplete. Reconnect and choose Sync now in Common Table.",
+        "Offline app files are unavailable. Reconnect and choose Download now in Common Table.",
         { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } },
       );
     })(),

@@ -137,6 +137,20 @@ try {
         headers: { ...request.headers, "accept-encoding": "identity" },
       },
       (incoming) => {
+        // Reproduce a host appending code to a build-hashed asset. The worker
+        // must reject it, and the UI must not claim the device ran out of space.
+        if (fault === "app-integrity" && request.url?.startsWith("/_next/static/")) {
+          const chunks = [];
+          incoming.on("data", (chunk) => chunks.push(chunk));
+          incoming.on("end", () => {
+            const body = Buffer.concat([...chunks, Buffer.from("\n/* injected host code */")]);
+            const headers = { ...incoming.headers, "content-length": body.length };
+            delete headers["transfer-encoding"];
+            response.writeHead(incoming.statusCode, headers);
+            response.end(body);
+          });
+          return;
+        }
         if (!downloading) {
           response.writeHead(incoming.statusCode, incoming.headers);
           incoming.pipe(response);
