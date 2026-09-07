@@ -182,6 +182,13 @@ The project deploys GitHub `main`. The build command must run `npm run build`
 so it generates the offline worker and app-file manifest after the Next.js build.
 Running `next build` alone omits that required generation step.
 
+`vercel.json` enables automatic Git deployments only for `main`. Other branches,
+including pull-request branches, do not create automatic Preview deployments.
+Keep `main` configured as Vercel's Production branch. Preview credentials are
+not configured; enabling previews later requires separate credentials and a
+change to this branch policy. Vercel documents these
+[branch deployment rules](https://vercel.com/docs/project-configuration/git-configuration#git.deploymentenabled).
+
 Set `DATABASE_URL` to the hosted database's pooled connection string and
 `BETTER_AUTH_SECRET` to a new random secret of at least 32 characters. Scope
 these credentials to Production; Preview needs separate credentials and setup.

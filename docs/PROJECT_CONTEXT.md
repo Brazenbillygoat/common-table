@@ -20,6 +20,11 @@ Neon Free. Hyrum confirmed public browsing in an incognito window on
 2026-09-06. Everyday hosted use does not depend on the PC or Docker. This
 confirmation does not establish hosted sign-in acceptance.
 
+`vercel.json` allows automatic Git deployments only from `main`, which remains
+the Vercel Production branch. Automatic branch/PR Preview deployments are
+disabled because Preview credentials are not configured. Production builds and
+the existing security checks remain enabled.
+
 The existing durable local data was transferred to Neon and checked against
 the source. The local Docker database remains available for development;
 sessions and verification tokens were not transferred.
@@ -37,7 +42,10 @@ without reused build cache restored all asset size/hash matches. Preserve this
 setting and the integrity checks.
 
 The scoped offline UI/error follow-up clarifies consent, empty/removal states
-and failure messages. Hyrum owns its push, deployment and visual/phone check.
+and failure messages. Hyrum merged it through PR #3; GitHub reports a successful
+Production deployment for merge commit `9bec81f`. The failed branch Preview
+deployment did not block the merge or Production deployment. Its visual/phone
+check remains Hyrum's responsibility.
 Full Safari/home-screen, reconnection and deployed-app-upgrade acceptance,
 including the actual iOS version, remains pending. The approved contract remains
 in `docs/ACTIVE_PLAN.md` until accepted delivery is recorded.
