@@ -1,10 +1,10 @@
 # Common Table
 
-Common Table is a mobile-first personal cookbook, structured recipe discovery
-system, and deterministic weekly meal planner.
+Common Table is a mobile-first personal cookbook and structured recipe discovery
+system. Deterministic weekly meal planning is planned.
 
 Published recipes are public. Administrator-created accounts may add and manage
-their own recipes. Meal plans remain private to their owner.
+their own recipes. Planned meal-plan features will remain private to their owner.
 
 Repository: [github.com/Brazenbillygoat/common-table](https://github.com/Brazenbillygoat/common-table)
 
@@ -13,7 +13,76 @@ alternatives, conditional instructions, and publishing. Browse searches public
 recipes by title, description, and ingredient names, with include/exclude
 filters, relevance/newest sorting, and 20 results per page. Each public recipe
 supports cooking choices and hiding unused content. Photos and meal planning
-are still in development.
+are not yet implemented.
+
+The app is hosted on Vercel Hobby with PostgreSQL on Neon Free. Published
+recipes can be viewed without signing in or running the local development
+environment. The PWA supports optional device downloads for offline public
+browsing, searching, and cooking. Authoring requires an internet connection.
+
+## Optional offline recipes
+
+Choose **Sync now** in Offline recipes to save every published recipe and the
+anonymous app files on that device. The first offer estimates recipe data and
+app files separately. Later offers describe added or changed recipes and
+removals. **Later** keeps your saved collection; online pages still read current
+publications. The manual **Sync** control checks again without downloading until
+you approve the offer. No sign-in is needed.
+
+**Available offline** means the complete saved collection and required app files
+are ready. Offline pages show the last successful sync time and use the same
+search, filters, sorting, pagination, cooking choices and URL state as online
+pages. Recipes do not have to be individually opened before going offline.
+
+Interrupted, inconsistent, invalid or oversized downloads and failed storage
+writes preserve the previous complete recipe collection. Limits are 1,000
+recipes, 20 MiB of recipe JSON and 256 KiB per sync request. Retry after
+reconnecting or freeing space. A confirmed **Remove offline downloads** clears
+only this app's downloaded recipes and offline files, preserving cloud data and sign-in.
+Safari may evict website storage. Downloads are not a permanent backup; loss of
+the entire installation requires reconnecting and downloading again.
+
+Prepared app updates wait until all Common Table pages close. Existing cooking
+pages retain their loaded recipe, choices and display state, even after a recipe
+is updated or unpublished. Close and reopen to use a prepared app version.
+
+### Offline verification
+
+Use local PostgreSQL with the existing migrations applied. Remote databases are
+rejected by the offline e2e runner. Tests create and remove only their fixture
+records. Install the locked dependencies and Playwright browsers, then run:
+
+```powershell
+npm.cmd ci
+npx.cmd playwright install chromium webkit
+npm.cmd run test:offline:e2e
+```
+
+Set `DATABASE_URL` in that process to the local test database. The runner builds
+two production versions, uses ports 3110–3112 on loopback, and exercises real
+service workers, IndexedDB, offline navigation and waiting-worker activation
+in headless Chromium and WebKit. On Windows, WebKit offline tests cut the app
+TCP transport and supply the matching connectivity signal because its protocol
+offline switch also disables cached service-worker navigation. Actual workers,
+storage and network failures are still exercised. Browser-restart tests use
+short, isolated temporary profiles to avoid native Windows cache path limits,
+and remove only those fixture-created profiles after closing them. Test output
+stays under ignored
+`.next-offline-e2e` and `test-results`. Optional
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` / `PLAYWRIGHT_WEBKIT_EXECUTABLE_PATH`
+select the matching official test binaries when using a task-local installation.
+Run the offline-publications integration test with `RUN_DATABASE_TESTS=1`
+and `--no-file-parallelism` when combining it with publication tests that
+intentionally create invalid public snapshots.
+
+The production build generates `public/offline-sw.js` and
+`public/offline-assets.json` from the anonymous shell and its exact static
+assets. Use `npm.cmd run build` to include this step. These generated files
+are ignored in Git; authenticated HTML and arbitrary server responses never
+enter the offline cache.
+
+Real iPhone Safari and home-screen acceptance remain owner checks, including
+the actual iOS version, reopening offline, reconnection and an application update.
 
 ## Find a recipe
 
@@ -37,8 +106,10 @@ normally; review and make cooking choices on the recipe page.
 Search matches any entered word. Relevance ranks distinct word coverage first,
 then title, ingredient, and description matches; publication date and recipe
 identity break ties. Empty searches browse newest. Only valid published
-snapshots are searched, so unpublished edits remain private. Search requires
-an online database connection; no offline recipe storage is included.
+snapshots are searched, so unpublished edits remain private. Online search reads
+current publications from the database. After a successful download, offline
+search uses the saved collection with the same matching, filters, sorting, and
+pagination.
 
 ## Publish a recipe
 
@@ -48,8 +119,9 @@ yield are optional. After publishing, edits stay private until you choose
 Publish updates. My Recipes shows publication status and unpublished changes.
 
 An open public recipe keeps its loaded content while you cook and change
-choices. Refresh or open it again to get the latest publication. Unpublish
-removes it from Browse and prevents new visits, while already-open pages stay
+choices. While online, refresh or open it again to get the latest publication.
+Unpublish removes it from online Browse and prevents new online visits. Offline
+copies are removed on the next successful sync; already-open cooking pages stay
 usable. Saved authoring content remains available, and publishing again uses
 the same public URL.
 
@@ -57,7 +129,7 @@ the same public URL.
 
 - Next.js App Router, React, and TypeScript
 - SCSS and CSS Modules
-- PostgreSQL in Docker
+- PostgreSQL on Neon in production and Docker locally
 - Drizzle ORM and reviewed SQL migrations
 - Better Auth with administrator-created email/password accounts
 - Zod and React Hook Form
@@ -81,19 +153,34 @@ npm.cmd run db:seed
 npm.cmd run dev
 ```
 
-The local application uses `http://localhost:3000`.
+The local application uses `http://localhost:3000`. For manual offline testing,
+stop the development server, run `npm.cmd run build`, then `npm.cmd run start`.
+Offline downloads require the generated production assets. Phone access also
+requires HTTPS.
 
 The publication migration preserves drafts and does not publish recipes. If an
 older database contains records already marked published without snapshots,
 the migration stops for explicit reconciliation before upgrade.
 
-### Production authentication on Vercel
+## Production hosting
+
+Production uses Vercel Hobby and Neon Free. Keep these free plans unless the
+owner explicitly approves an upgrade. Provider limits can restrict or pause
+service; there is no application-level usage meter or spending cutoff.
+
+The project deploys GitHub `main`. The build command must run `npm run build`
+so it generates the offline worker and app-file manifest after the Next.js build.
+Running `next build` alone omits that required generation step.
 
 Set `DATABASE_URL` to the hosted database's pooled connection string and
 `BETTER_AUTH_SECRET` to a new random secret of at least 32 characters. Scope
 these credentials to Production; Preview needs separate credentials and setup.
 The `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables are only
 used by local Docker.
+
+Local development uses its own Docker database. Keep production credentials
+out of Git and use the direct Neon connection for separately authorized
+database administration or migrations.
 
 Omit `BETTER_AUTH_URL` on Vercel to use `https://` plus the assigned
 `VERCEL_PROJECT_PRODUCTION_URL`. Keep access to Vercel's system environment

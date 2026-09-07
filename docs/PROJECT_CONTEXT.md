@@ -1,54 +1,47 @@
 # Common Table project context
 
-Last reviewed against the repository: 2026-09-06
+Last reviewed against the repository: 2026-09-07
 
 ## Product
 
-Common Table is a mobile-first personal cookbook, recipe discovery system, and
-deterministic meal planner for Hyrum and a small family group. Published recipes
-are public. Accounts are administrator-created; recipes and meal plans remain
-owner-controlled. The application is an installable, online-first PWA without
-offline synchronization.
+Common Table is a mobile-first personal cookbook and recipe discovery system
+for Hyrum and a small family group. Deterministic meal planning is planned.
+Published recipes are public. Accounts are administrator-created, and recipes
+remain owner-controlled. Planned meal-plan features will remain private to their
+owner. The application is an installable, online-first PWA with
+optional public recipe downloads for offline browsing, search and cooking.
 
-It is not a social network, AI product, pantry tracker, or native application.
+It is not a social network, pantry tracker, or native application.
 
-## Future direction
+## Hosting and next work
 
-Planned direction agreed on 2026-09-06. This is not implemented functionality
-or an active implementation plan.
+Production is deployed from GitHub `main` to Vercel Hobby, with PostgreSQL on
+Neon Free. Hyrum confirmed public browsing in an incognito window on
+2026-09-06. Everyday hosted use does not depend on the PC or Docker. This
+confirmation does not establish hosted sign-in or phone/offline acceptance.
 
-- Keep Common Table a free personal hobby app. Target Hyrum's account and phone
-  for the first mobile release, with possible family use later. Install the
-  existing PWA on the home screen without a native build or App Store release.
-- Prioritize basic recipe search before the first mobile release, including
-  searching the recipe data available offline.
-- Host the application and PostgreSQL remotely so everyday phone use never
-  requires Hyrum's PC or Docker to be running. Target $0 ongoing cost with a
-  provider-issued free web address. Vercel Hobby and Neon Free are proposed
-  providers; confirm their free-tier limits before setup. Docker is optional
-  for local development; a separate free hosted development database is another
-  option.
-- Store the app files and a complete copy of the synchronized recipe data on
-  the phone. Offline use supports browsing, searching, and cooking from the
-  latest successful sync, with a visible last-sync time. Recipe writes are
-  disabled offline; there are no queued offline edits to merge later. This is
-  deliberate local storage and synchronization, not just previously visited
-  page caching.
-- Refresh the local recipe copy when connectivity returns while the app is
-  open, or on the next online opening. Preserve the previous complete copy if
-  a sync fails. Closed-app background synchronization is not required.
-- Continue developing on the PC and deploying the same application. The
-  installed phone app receives deployed code updates when online. Verify
-  offline reopening, reconnection, and app updates on Hyrum's phone before
-  considering the mobile release ready.
+The existing durable local data was transferred to Neon and checked against
+the source. The local Docker database remains available for development;
+sessions and verification tokens were not transferred.
+
+Keep the app at $0 ongoing cost. Restrictions or downtime are preferable to
+paid upgrades. Use the provider-issued address; upgrades and paid services
+require separate owner authorization. No application-level usage meter or
+spending cutoff is implemented.
+
+The offline implementation has passed independent review and is integrated into
+local `main` with the reconciled documentation. Hyrum will push `main`, check the
+Vercel deployment, and perform visual and real-iPhone Safari/home-screen
+acceptance. Deployment and phone acceptance are still pending. The approved
+contract remains in `docs/ACTIVE_PLAN.md` until accepted delivery is recorded.
 
 ## Current implementation
 
 The repository currently provides:
 
 - Next.js 16.2 App Router, React 19, TypeScript, SCSS, and CSS Modules.
-- PostgreSQL 18 through Docker Compose, Drizzle ORM, committed SQL migrations,
-  and idempotent reference-data seeding.
+- PostgreSQL 18 on Neon in production and through Docker Compose locally,
+  Drizzle ORM, committed SQL migrations, and idempotent reference-data seeding.
 - Better Auth email/password sessions with public sign-up disabled and the
   admin plugin available for managed accounts. Auth initialization and the
   production environment checker share URL resolution: explicit `BETTER_AUTH_URL`
@@ -111,12 +104,14 @@ The repository currently provides:
   pages remain usable after updates or unpublishing.
 - Canonical and recipe-owned custom ingredients and units, including numeric,
   ranged, free-form, and omitted quantities.
-- Vitest, Testing Library, ESLint, Prettier, TypeScript, build, and opt-in
-  PostgreSQL integration checks.
+- Optional downloads of all public recipes and required anonymous app files,
+  with explicit consent, incremental sync, offline search/cooking, sync status,
+  retry, and confirmed removal. Authoring remains online.
+- Vitest, Testing Library, ESLint, Prettier, TypeScript, build, opt-in PostgreSQL
+  integration checks, and production-build Chromium/WebKit offline tests.
 
 Not implemented: recipe deletion, photo storage, dietary derivation,
-meal-plan generation, administrator reference-data UI, production hosting, or
-final icons.
+meal planning, administrator reference-data UI, or final icons.
 
 ## Architecture
 
@@ -156,8 +151,8 @@ Migration `0002_icy_ogun.sql` adds publication storage without publishing or
 rewriting authoring data. It fails before schema changes if the previous schema
 contains published rows requiring reconciliation.
 
-Search reads the small published collection in one fresh server query, requires
-published status and valid supported snapshots matching recipe identity, and
+Online search reads the small published collection in one fresh server query,
+requires published status and valid supported snapshots matching recipe identity, and
 uses shared pure TypeScript matching/URL utilities. It never searches editable
 rows or current reference labels. Matching is case-insensitive partial text;
 any search word may match. Relevance orders distinct matched words, then title,
@@ -166,8 +161,37 @@ identity ascending. Filtering/ranking precede pagination. Every included term
 matches a surviving ingredient independently, even across mutually exclusive
 alternatives. Exclusions reject mandatory standalone occurrences and groups with
 no allowed option; optional occurrences may be omitted. No substitution solver,
-dietary assurances, database-specific search extension, schema change, or offline
-recipe storage is part of this search implementation.
+dietary assurances, database-specific search extension, or schema change is
+part of this search implementation. Offline search reuses the same pure matching,
+filtering, ranking, and pagination over the last successfully saved collection.
+
+## Offline reading
+
+The static `/offline` page forces empty request headers/cookies in the shared
+layout and contains no recipe or viewer data. After explicit initial consent,
+the worker downloads that shell and its build-listed, size/hash-checked assets.
+Only public document navigations may fall back to it. Its local History API
+navigation reuses Browse results, search controls, ranking/validation and cooking
+presentation without fetching server-component payloads. Online public routes
+remain fresh server reads. Offline navigation from an already-open online page
+uses a document request so the worker can supply the shell.
+
+The anonymous offline-publications API uses read-only repeatable-read PostgreSQL
+transactions, validated publication snapshots, sorted collection manifests and
+canonical SHA-256 fingerprints. Opening/reconnecting checks metadata only.
+Consent downloads just added/changed recipe snapshots; the complete manifest
+also defines removals. A changed revision returns a conflict. Client validation
+reconstructs the entire expected collection before a single IndexedDB transaction
+compares the prior storage token and commits. Quota/validation/network failures
+preserve the prior complete copy; removal tombstones invalidate stale writers.
+No database migration, auth rule or authoring mutation changed.
+
+App caches are versioned; a prepared worker follows the normal waiting lifecycle
+until old pages close. There is no forced activation or automatic reload. An open
+cooking view keeps its loaded publication and local display state across recipe
+sync/removal. The UI checks both app-file readiness and valid saved recipes,
+shows last-sync time, supports retry/confirmed removal, and explains eviction.
+Limits: 1,000 publications, 20 MiB recipe JSON, 256 KiB requests, 25 MiB app files.
 
 ## Security and product constraints
 
@@ -175,59 +199,47 @@ recipe storage is part of this search implementation.
   email addresses.
 - Recipe and meal-plan access is owner-checked on the server. Canonical data and
   account management require an administrator.
-- Local secrets remain in ignored environment files. Production secrets,
-  object storage, hosting, and deployment are not configured.
-- A service worker is intentionally absent until offline invalidation and
-  stale-data behavior are designed.
+- Local secrets remain in ignored environment files. Vercel Production has
+  the pooled Neon `DATABASE_URL` and a separate `BETTER_AUTH_SECRET`.
+  `BETTER_AUTH_URL` is omitted in favor of the stable Vercel production hostname.
+  Preview credentials and object storage are not configured.
+- The offline worker caches only a build-time anonymous shell and its exact
+  static assets. Authentication, private pages, mutations and arbitrary Next.js
+  responses are never cached.
 - Docker Desktop must be running for local database operations.
 - Generated app icons are placeholders.
 
-## Verification baseline
+## Verification and acceptance
 
-The publication candidate passed 351 unit/component/API tests in 45 files and
-16 PostgreSQL integration tests in six files, including private-edit isolation,
-publication replacement, stale/concurrent requests, authorization, archived
-recipes, adaptive content, unpublish/republish and deterministic pagination.
-The new SQL migration was inspected and applied successfully twice. Test data
-is isolated to fixture-owned accounts and recipes. Formatting, lint, TypeScript,
-and the production build passed; Browse and public recipes render dynamically.
-Owner browser/runtime and visual acceptance is still pending.
+Search and automatic search were accepted by Hyrum on 2026-09-06. Their checks
+covered matching and publication isolation, URL state, debounce and immediate
+actions, overlapping requests, focus preservation, and browser navigation.
+The search baseline passed 388 unit/component/API tests, nine relevant
+PostgreSQL integration tests, formatting, lint, TypeScript, and the production
+build. The automatic-search follow-up passed its 53 focused tests and relevant
+static/build checks. Detailed candidate evidence and independent review are
+retained in the local task records.
 
-The collapsible-heading follow-up passed 13 focused shared cooking/preview
-tests, TypeScript, and changed-file lint/format checks. Earlier publication
-checks remain evidence for unchanged behavior.
+Production auth URL resolution was checked with eight helper tests, isolated
+runtime/configuration scenarios, static checks, and a production build. The
+reviewed commit `ca494594b02cfbede2481b4399ee1e9e7be260ff` was pushed and
+deployed by Hyrum. Public incognito browsing is confirmed.
 
-The Details candidate was verified on 2026-09-04: formatting, lint, TypeScript,
-230 unit/component/API tests across 39 files, the targeted PostgreSQL Details
-integration test, the Next.js production build, and `git diff --check` passed.
-The affected component suite was rerun after correcting a test's effect-cleanup
-wait. No schema or migration changes were needed. Owner browser and visual
-acceptance remains separate.
+The offline implementation passed formatting, lint, TypeScript, 424
+unit/component/API tests, ten relevant PostgreSQL integration tests, the
+production build, and whitespace checks. Thirty browser tests passed, 15 each
+in Chromium and WebKit, using real service workers, browser storage, and two
+production builds. Independent review accepted the implementation with no
+blocking findings. Documentation reconciliation changed no application code;
+its formatting and the merged source were checked separately.
 
-The Preview visibility follow-up passed 14 focused Preview/resolver tests,
-TypeScript, Sass compilation, and changed-file lint/format checks. Prior
-verification remains applicable to unchanged application behavior.
+Real iPhone Safari/home-screen, offline reopen, reconnection, and deployed app
+update acceptance remain pending. Record the actual iOS version and Hyrum's
+results after deployment; automated checks do not establish those outcomes.
 
-The recipe-search candidate was checked on 2026-09-06: formatting, lint,
-TypeScript, all 388 unit/component/API tests in 50 files, the production build,
-and `git diff --check` passed. All nine required PostgreSQL search/publication
-integration tests passed after starting the database and correcting a missing
-publication timestamp in the new pagination fixture. Only fixture-owned data
-was changed. Database and independent Kilo review results are recorded against
-the exact candidate in the external Control task outcome at
-`C:\Users\hyrum\.ai-engineering\control-runtime\operations\common-table\recipe-search\OUTCOME.md`.
-Hyrum accepted the recipe-search implementation and automatic-search follow-up
-on 2026-09-06. The reviewed candidate was fast-forwarded into local `main`.
-
-The automatic-search follow-up passed 53 focused controls, Browse, redirect,
-URL and server-search tests, TypeScript, changed-file lint/format, the production
-build, and diff whitespace checks. These cover the 500 ms debounce, immediate
-clears/removals/sorting, preserved input focus and drafts, overlapping requests,
-Back/link navigation, and composition input. Prior PostgreSQL verification
-remains applicable because publication, matching, queries and fixtures are
-unchanged. Owner runtime and visual acceptance is complete, and the active plan
-has been retired. Compact outcome and cleanup records remain at the external
-Control task path above.
+Use change-scoped verification for each new task. Keep detailed task evidence
+and completed outcomes in the local task records rather than accumulating
+implementation logs here. PostgreSQL fixtures must touch only their own data.
 
 ## Documentation roles
 
