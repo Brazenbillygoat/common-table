@@ -29,25 +29,30 @@ import {
 } from "./manage-recipe-ingredients";
 import { createRecipeStep, deleteRecipeStep, updateRecipeStep } from "./manage-recipe-steps";
 
-describe("adaptive recipe alternatives PostgreSQL integration", () => {
+describe.each(["draft", "published"] as const)("PostgreSQL alternatives (%s)", (status) => {
   afterAll(async () => closeDatabase());
 
   it("preserves ownership, versions, grouping, conditions, guards, ordering, moves, and rollback", async () => {
     const database = getDatabase();
-    const [existingUser] = await database.select({ id: user.id }).from(user).limit(1);
+    const ownerId = `alternatives-owner-${crypto.randomUUID()}`;
     const [canonicalIngredient] = await database
       .select({ id: ingredient.id })
       .from(ingredient)
       .where(eq(ingredient.isActive, true))
       .limit(1);
-    if (!existingUser || !canonicalIngredient) {
-      throw new Error("Integration test requires one user and one active ingredient.");
+    if (!canonicalIngredient) {
+      throw new Error("Integration test requires one active ingredient.");
     }
 
     let recipeId: string | undefined;
     try {
+      await database.insert(user).values({
+        id: ownerId,
+        name: "Alternatives test owner",
+        email: `${ownerId}@example.invalid`,
+      });
       const created = await createRecipeDraft({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         input: {
           title: `Alternative integration ${crypto.randomUUID()}`,
           description: null,
@@ -57,6 +62,10 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
         },
       });
       recipeId = created.id;
+      await database
+        .update(recipe)
+        .set({ status, publishedAt: status === "published" ? new Date() : null })
+        .where(eq(recipe.id, recipeId));
       const [initialSection] = await database
         .select({ id: recipeIngredientSection.id })
         .from(recipeIngredientSection)
@@ -65,28 +74,44 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
 
       await expect(
         mutateRecipeIngredientStructure({
-          actorUserId: existingUser.id,
+          actorUserId: "another-user",
+          recipeId,
+          expectedVersion: 1,
+          action: { type: "renameSection", sectionId: initialSection.id, name: "Unauthorized" },
+        }),
+      ).rejects.toMatchObject({ code: "RECIPE_NOT_FOUND" });
+      await expect(
+        mutateRecipeIngredientStructure({
+          actorUserId: ownerId,
+          recipeId,
+          expectedVersion: 2,
+          action: { type: "renameSection", sectionId: initialSection.id, name: "Stale" },
+        }),
+      ).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
+      await expect(
+        mutateRecipeIngredientStructure({
+          actorUserId: ownerId,
           recipeId,
           expectedVersion: 1,
           action: { type: "addSection", name: "Seasoning" },
         }),
       ).rejects.toMatchObject({ code: "UNNAMED_SECTION_REQUIRES_NAME" });
       await mutateRecipeIngredientStructure({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 1,
         action: { type: "renameSection", sectionId: initialSection.id, name: "Filling" },
       });
       await expect(
         mutateRecipeIngredientStructure({
-          actorUserId: existingUser.id,
+          actorUserId: ownerId,
           recipeId,
           expectedVersion: 2,
           action: { type: "addSection", name: " filling " },
         }),
       ).rejects.toMatchObject({ code: "DUPLICATE_SECTION" });
       const addedSection = await mutateRecipeIngredientStructure({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 2,
         action: { type: "addSection", name: "Seasoning" },
@@ -95,14 +120,14 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
       const seasoningId = addedSection.sectionId;
 
       const tofu = await createRecipeIngredientLine({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         sectionId: initialSection.id,
         expectedVersion: 3,
         input: normalized(canonicalIngredient.id, false),
       });
       const greenOnions = await createRecipeIngredientLine({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         sectionId: seasoningId,
         expectedVersion: 4,
@@ -112,7 +137,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
         },
       });
       const grouped = await mutateRecipeIngredientStructure({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 5,
         action: {
@@ -125,7 +150,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
       if (!("groupId" in grouped)) throw new Error("Group insert returned no id.");
 
       const choiceStep = await createRecipeStep({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 6,
         input: {
@@ -135,7 +160,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
         },
       });
       const optionalStep = await createRecipeStep({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 7,
         input: {
@@ -146,7 +171,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
       });
 
       const preservedCondition = await updateRecipeStep({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         stepId: choiceStep.step.id,
         expectedVersion: 8,
@@ -170,7 +195,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
       ).rejects.toMatchObject({ code: "RECIPE_NOT_FOUND" });
       await expect(
         createRecipeStep({
-          actorUserId: existingUser.id,
+          actorUserId: ownerId,
           recipeId,
           expectedVersion: 9,
           input: {
@@ -182,7 +207,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
       ).rejects.toMatchObject({ code: "CONDITION_INVALID" });
       await expect(
         updateRecipeIngredientLine({
-          actorUserId: existingUser.id,
+          actorUserId: ownerId,
           recipeId,
           ingredientId: greenOnions.line.id,
           expectedVersion: 9,
@@ -195,7 +220,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
 
       await expect(
         mutateRecipeIngredientStructure({
-          actorUserId: existingUser.id,
+          actorUserId: ownerId,
           recipeId,
           expectedVersion: 9,
           action: { type: "ungroup", groupId: grouped.groupId },
@@ -203,7 +228,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
       ).rejects.toMatchObject({ code: "CONTENT_REFERENCED" });
       await expect(
         deleteRecipeIngredientLine({
-          actorUserId: existingUser.id,
+          actorUserId: ownerId,
           recipeId,
           ingredientId: greenOnions.line.id,
           expectedVersion: 9,
@@ -217,7 +242,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
       ).toEqual([{ version: 9 }]);
 
       const addedOption = await mutateRecipeIngredientStructure({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 9,
         action: { type: "addGroupOption", groupId: grouped.groupId, option: raw("Tempeh") },
@@ -233,7 +258,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
         ...currentOptions.map((option) => option.id).filter((id) => id !== addedOption.optionId),
       ];
       await mutateRecipeIngredientStructure({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 10,
         action: {
@@ -243,7 +268,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
         },
       });
       await mutateRecipeIngredientStructure({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 11,
         action: {
@@ -255,7 +280,7 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
         },
       });
 
-      const editor = await getOwnedRecipeIngredientEditor(recipeId, existingUser.id);
+      const editor = await getOwnedRecipeIngredientEditor(recipeId, ownerId);
       expect(editor?.sections?.map((section) => section.name)).toEqual(["Filling", "Seasoning"]);
       expect(editor?.choiceGroups).toEqual([
         { id: grouped.groupId, sectionId: seasoningId, label: "Protein" },
@@ -275,25 +300,25 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
       ).rejects.toThrow();
 
       await deleteRecipeStep({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         stepId: choiceStep.step.id,
         expectedVersion: 12,
       });
       await deleteRecipeStep({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         stepId: optionalStep.step.id,
         expectedVersion: 13,
       });
       await mutateRecipeIngredientStructure({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 14,
         action: { type: "ungroup", groupId: grouped.groupId },
       });
       await mutateRecipeIngredientStructure({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         recipeId,
         expectedVersion: 15,
         action: {
@@ -319,10 +344,33 @@ describe("adaptive recipe alternatives PostgreSQL integration", () => {
         await database
           .select({ version: recipe.version })
           .from(recipe)
-          .where(and(eq(recipe.id, recipeId), eq(recipe.ownerId, existingUser.id))),
+          .where(and(eq(recipe.id, recipeId), eq(recipe.ownerId, ownerId))),
       ).toEqual([{ version: 16 }]);
+
+      await database.update(recipe).set({ status: "archived" }).where(eq(recipe.id, recipeId));
+      await expect(
+        mutateRecipeIngredientStructure({
+          actorUserId: ownerId,
+          recipeId,
+          expectedVersion: 16,
+          action: { type: "renameSection", sectionId: seasoningId, name: "Archived change" },
+        }),
+      ).rejects.toMatchObject({ code: "RECIPE_NOT_FOUND" });
+      expect(
+        await database
+          .select({ version: recipe.version })
+          .from(recipe)
+          .where(eq(recipe.id, recipeId)),
+      ).toEqual([{ version: 16 }]);
+      expect(
+        await database
+          .select({ name: recipeIngredientSection.name })
+          .from(recipeIngredientSection)
+          .where(eq(recipeIngredientSection.id, seasoningId)),
+      ).toEqual([{ name: "Seasoning" }]);
     } finally {
       if (recipeId) await database.delete(recipe).where(eq(recipe.id, recipeId));
+      await database.delete(user).where(eq(user.id, ownerId));
     }
   });
 });

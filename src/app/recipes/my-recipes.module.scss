@@ -57,7 +57,13 @@
   margin-top: 0;
 }
 
-.draft > a {
+.recipeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.recipeActions a {
   display: inline-flex;
   min-height: 44px;
   align-items: center;

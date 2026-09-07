@@ -331,7 +331,8 @@ export async function advanceRecipeVersion(
   actorUserId: string,
   expectedVersion: number,
 ) {
-  // This update checks ownership, draft status, and version before incrementing the version.
+  // Lock and advance the owned editable parent before reading or changing any child
+  // content. Publication takes the same parent lock, so it cannot capture a partial save.
   const [updated] = await transaction
     .update(recipe)
     .set({ version: sql`${recipe.version} + 1`, updatedAt: new Date() })
@@ -339,7 +340,7 @@ export async function advanceRecipeVersion(
       and(
         eq(recipe.id, recipeId),
         eq(recipe.ownerId, actorUserId),
-        eq(recipe.status, "draft"),
+        inArray(recipe.status, ["draft", "published"]),
         eq(recipe.version, expectedVersion),
       ),
     )
@@ -349,14 +350,18 @@ export async function advanceRecipeVersion(
   }
 
   // Check again to tell stale data from unavailable data without revealing another user's recipe.
-  const [ownedDraft] = await transaction
+  const [ownedRecipe] = await transaction
     .select({ id: recipe.id })
     .from(recipe)
     .where(
-      and(eq(recipe.id, recipeId), eq(recipe.ownerId, actorUserId), eq(recipe.status, "draft")),
+      and(
+        eq(recipe.id, recipeId),
+        eq(recipe.ownerId, actorUserId),
+        inArray(recipe.status, ["draft", "published"]),
+      ),
     )
     .limit(1);
-  throw new RecipeIngredientError(ownedDraft ? "VERSION_CONFLICT" : "RECIPE_NOT_FOUND");
+  throw new RecipeIngredientError(ownedRecipe ? "VERSION_CONFLICT" : "RECIPE_NOT_FOUND");
 }
 
 export async function loadSafeIngredientLine(

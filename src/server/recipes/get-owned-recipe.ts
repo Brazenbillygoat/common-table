@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { getDatabase } from "@/server/db/client";
 import { recipe } from "@/server/db/schema";
@@ -14,7 +14,13 @@ export async function getOwnedRecipe(recipeId: string, ownerId: string) {
       version: recipe.version,
     })
     .from(recipe)
-    .where(and(eq(recipe.id, recipeId), eq(recipe.ownerId, ownerId)))
+    .where(
+      and(
+        eq(recipe.id, recipeId),
+        eq(recipe.ownerId, ownerId),
+        inArray(recipe.status, ["draft", "published"]),
+      ),
+    )
     .limit(1);
 
   return ownedRecipe ?? null;

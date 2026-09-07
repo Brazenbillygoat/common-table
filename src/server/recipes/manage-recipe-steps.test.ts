@@ -74,7 +74,7 @@ describe("manage recipe steps", () => {
     vi.clearAllMocks();
   });
 
-  it("creates at the next position after advancing the owned draft version", async () => {
+  it("creates at the next position after advancing the owned editable recipe version", async () => {
     const step = {
       id: "e785b35e-4ff4-421b-9609-58b889461279",
       position: 3,
@@ -103,7 +103,7 @@ describe("manage recipe steps", () => {
     expect(tx.update).toHaveBeenCalledOnce();
   });
 
-  it("classifies an owned stale draft as a version conflict without a step mutation", async () => {
+  it("classifies an owned stale recipe as a version conflict without a step mutation", async () => {
     const tx = transaction();
     tx.update.mockReturnValueOnce(returningUpdate([]));
     tx.select.mockReturnValueOnce(selectLimit([{ id: "recipe-id" }]));
@@ -121,7 +121,7 @@ describe("manage recipe steps", () => {
     expect(tx.insert).not.toHaveBeenCalled();
   });
 
-  it("classifies another user's or nondraft recipe as unavailable", async () => {
+  it("classifies another user's or archived recipe as unavailable", async () => {
     const tx = transaction();
     tx.update.mockReturnValueOnce(returningUpdate([]));
     tx.select.mockReturnValueOnce(selectLimit([]));

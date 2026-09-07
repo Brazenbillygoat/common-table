@@ -204,7 +204,11 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
           {banner === "conflict" ? (
             <>
               <p>Reload the latest version before making another change.</p>
-              <button onClick={() => router.refresh()} type="button">
+              <button
+                className={styles.primaryAction}
+                onClick={() => router.refresh()}
+                type="button"
+              >
                 Reload draft
               </button>
             </>
@@ -253,6 +257,7 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
                   <p className={styles.instruction}>{step.instruction}</p>
                   <div className={styles.actions}>
                     <button
+                      className={styles.secondaryAction}
                       disabled={pending || banner === "conflict"}
                       onClick={() => openEdit(step)}
                       ref={(element) => {
@@ -264,6 +269,7 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
                       Edit
                     </button>
                     <button
+                      className={styles.dangerAction}
                       disabled={pending || banner === "conflict"}
                       onClick={() => setDeletingId(step.id)}
                       type="button"
@@ -271,6 +277,7 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
                       Delete
                     </button>
                     <button
+                      className={styles.secondaryAction}
                       disabled={index === 0 || pending || banner === "conflict"}
                       onClick={() => void move(index, -1)}
                       type="button"
@@ -278,6 +285,7 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
                       Move up
                     </button>
                     <button
+                      className={styles.secondaryAction}
                       disabled={index === steps.length - 1 || pending || banner === "conflict"}
                       onClick={() => void move(index, 1)}
                       type="button"
@@ -289,13 +297,18 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
                     <div className={styles.deleteConfirmation}>
                       <p>Delete step?</p>
                       <button
+                        className={styles.dangerAction}
                         disabled={pending || banner === "conflict"}
                         onClick={() => void deleteStep(step.id)}
                         type="button"
                       >
                         Delete
                       </button>
-                      <button onClick={() => setDeletingId(null)} type="button">
+                      <button
+                        className={styles.secondaryAction}
+                        onClick={() => setDeletingId(null)}
+                        type="button"
+                      >
                         Cancel
                       </button>
                     </div>
@@ -329,7 +342,7 @@ export function InstructionEditor({ data }: { data: RecipeStepEditorData }) {
       ) : null}
       {editingId === null ? (
         <button
-          className={styles.addButton}
+          className={`${styles.addButton} ${styles.primaryAction}`}
           disabled={pending || banner === "conflict"}
           onClick={openNew}
           type="button"
@@ -438,10 +451,19 @@ function InstructionForm({
         </p>
       ) : null}
       <div className={styles.actions}>
-        <button disabled={pending || mutationDisabled} type="submit">
+        <button
+          className={styles.primaryAction}
+          disabled={pending || mutationDisabled}
+          type="submit"
+        >
           {submitLabel}
         </button>
-        <button disabled={pending} onClick={cancel} type="button">
+        <button
+          className={styles.secondaryAction}
+          disabled={pending}
+          onClick={cancel}
+          type="button"
+        >
           Cancel
         </button>
       </div>

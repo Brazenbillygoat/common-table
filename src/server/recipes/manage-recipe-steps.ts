@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, max, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, max, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/server/db/client";
 import { recipe, recipeIngredient, recipeStep } from "@/server/db/schema";
@@ -220,6 +220,8 @@ async function advanceVersion(
   actorUserId: string,
   expectedVersion: number,
 ) {
+  // Acquire the same parent-row lock as publication before any child reads or writes.
+  // Keep it until the entire instruction mutation commits or rolls back.
   const [updated] = await transaction
     .update(recipe)
     .set({ version: sql`${recipe.version} + 1`, updatedAt: new Date() })
@@ -227,7 +229,7 @@ async function advanceVersion(
       and(
         eq(recipe.id, recipeId),
         eq(recipe.ownerId, actorUserId),
-        eq(recipe.status, "draft"),
+        inArray(recipe.status, ["draft", "published"]),
         eq(recipe.version, expectedVersion),
       ),
     )
@@ -235,14 +237,18 @@ async function advanceVersion(
   if (updated) {
     return updated.version;
   }
-  const [ownedDraft] = await transaction
+  const [ownedRecipe] = await transaction
     .select({ id: recipe.id })
     .from(recipe)
     .where(
-      and(eq(recipe.id, recipeId), eq(recipe.ownerId, actorUserId), eq(recipe.status, "draft")),
+      and(
+        eq(recipe.id, recipeId),
+        eq(recipe.ownerId, actorUserId),
+        inArray(recipe.status, ["draft", "published"]),
+      ),
     )
     .limit(1);
-  throw new RecipeStepError(ownedDraft ? "VERSION_CONFLICT" : "RECIPE_NOT_FOUND");
+  throw new RecipeStepError(ownedRecipe ? "VERSION_CONFLICT" : "RECIPE_NOT_FOUND");
 }
 
 export type RecipeStepMutationResult = { step: RecipeStep; version: number };

@@ -8,9 +8,50 @@ their own recipes. Meal plans remain private to their owner.
 
 Repository: [github.com/Brazenbillygoat/common-table](https://github.com/Brazenbillygoat/common-table)
 
-The current application supports authenticated recipe drafts, including
-creating drafts and adding, editing, reordering, and deleting ingredient lines.
-Recipe discovery and meal planning are still in development.
+The application supports owner-controlled recipe authoring, ingredient
+alternatives, conditional instructions, and publishing. Browse searches public
+recipes by title, description, and ingredient names, with include/exclude
+filters, relevance/newest sorting, and 20 results per page. Each public recipe
+supports cooking choices and hiding unused content. Photos and meal planning
+are still in development.
+
+## Find a recipe
+
+Enter search words and comma-separated ingredient terms on Browse. Results
+update after a 500 ms pause in typing. Removing a pill, clearing a field or all
+filters, and changing sort update results immediately. Enter or Search can
+apply pending typing immediately; neither is required. Search updates preserve
+your input focus and cursor position. Applied searches live in the URL for
+refresh, sharing, pagination, and browser Back. Existing `/search` links redirect
+to Browse.
+
+Matching is case-insensitive and partial: butter matches salted butter and
+peanut butter. Every included term must match an ingredient remaining after
+exclusions; included ingredients may be mutually exclusive alternatives.
+Excluded required ingredients reject a recipe unless an allowed alternative
+remains in their choice group. Optional excluded ingredients can be omitted.
+Conditional results explain the necessary omissions or available alternatives.
+These are text filters, not dietary or allergen assurances. Recipe links open
+normally; review and make cooking choices on the recipe page.
+
+Search matches any entered word. Relevance ranks distinct word coverage first,
+then title, ingredient, and description matches; publication date and recipe
+identity break ties. Empty searches browse newest. Only valid published
+snapshots are searched, so unpublished edits remain private. Search requires
+an online database connection; no offline recipe storage is included.
+
+## Publish a recipe
+
+Save your changes in the editors, then open Preview. Publishing requires a
+title, at least one ingredient, and at least one instruction. Description and
+yield are optional. After publishing, edits stay private until you choose
+Publish updates. My Recipes shows publication status and unpublished changes.
+
+An open public recipe keeps its loaded content while you cook and change
+choices. Refresh or open it again to get the latest publication. Unpublish
+removes it from Browse and prevents new visits, while already-open pages stay
+usable. Saved authoring content remains available, and publishing again uses
+the same public URL.
 
 ## Stack
 
@@ -41,6 +82,10 @@ npm.cmd run dev
 ```
 
 The local application uses `http://localhost:3000`.
+
+The publication migration preserves drafts and does not publish recipes. If an
+older database contains records already marked published without snapshots,
+the migration stops for explicit reconciliation before upgrade.
 
 ## Create an account
 
@@ -75,3 +120,7 @@ git diff --check
 
 Architecture and current implementation state are documented in
 `docs/PROJECT_CONTEXT.md`.
+
+PostgreSQL integration tests are opt-in. With the local database running and
+migrated, set `RUN_DATABASE_TESTS=1` for `npm.cmd test -- .integration.test.ts`,
+then restore its previous value. Fixtures create and remove only their own data.

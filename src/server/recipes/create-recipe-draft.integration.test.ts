@@ -19,18 +19,19 @@ describe("createRecipeDraft PostgreSQL integration", () => {
 
   it("persists an owned draft and unnamed section", async () => {
     const database = getDatabase();
-    const [existingUser] = await database.select({ id: user.id }).from(user).limit(1);
-
-    if (!existingUser) {
-      throw new Error("The database integration test requires one existing local user.");
-    }
+    const ownerId = `draft-owner-${crypto.randomUUID()}`;
 
     const uniqueTitle = `Database integration recipe ${crypto.randomUUID()}`;
     let createdId: string | undefined;
 
     try {
+      await database.insert(user).values({
+        id: ownerId,
+        name: "Draft test owner",
+        email: `${ownerId}@example.invalid`,
+      });
       const created = await createRecipeDraft({
-        actorUserId: existingUser.id,
+        actorUserId: ownerId,
         input: {
           title: uniqueTitle,
           description: null,
@@ -59,7 +60,7 @@ describe("createRecipeDraft PostgreSQL integration", () => {
         .where(eq(recipeIngredientSection.recipeId, created.id));
 
       expect(storedRecipe).toEqual({
-        ownerId: existingUser.id,
+        ownerId,
         status: "draft",
         version: 1,
         publishedAt: null,
@@ -69,6 +70,7 @@ describe("createRecipeDraft PostgreSQL integration", () => {
       if (createdId) {
         await database.delete(recipe).where(eq(recipe.id, createdId));
       }
+      await database.delete(user).where(eq(user.id, ownerId));
     }
   });
 });

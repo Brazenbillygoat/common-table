@@ -1,8 +1,7 @@
-import Link from "next/link";
-
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
+import { GuardedLink } from "./GuardedLink";
 import styles from "./navigation.module.scss";
 
 type SiteHeaderProps = {
@@ -13,7 +12,6 @@ type SiteHeaderProps = {
 
 const primaryLinks = [
   { href: "/", label: "Browse" },
-  { href: "/search", label: "Search" },
   { href: "/meal-plans", label: "Meal Plan" },
   { href: "/recipes", label: "My Recipes" },
 ];
@@ -22,14 +20,14 @@ export function SiteHeader({ viewer }: SiteHeaderProps) {
   return (
     <header className={styles.siteHeader}>
       <div className={styles.headerContent}>
-        <Link className={styles.brand} href="/">
+        <GuardedLink className={styles.brand} href="/">
           Common Table
-        </Link>
+        </GuardedLink>
         <nav aria-label="Primary navigation" className={styles.desktopNavigation}>
           {primaryLinks.map((link) => (
-            <Link className={styles.navigationLink} href={link.href} key={link.href}>
+            <GuardedLink className={styles.navigationLink} href={link.href} key={link.href}>
               {link.label}
-            </Link>
+            </GuardedLink>
           ))}
         </nav>
         <div className={styles.account}>
@@ -40,9 +38,9 @@ export function SiteHeader({ viewer }: SiteHeaderProps) {
               <SignOutButton />
             </>
           ) : (
-            <Link className={styles.signInLink} href="/sign-in">
+            <GuardedLink className={styles.signInLink} href="/sign-in">
               Sign in
-            </Link>
+            </GuardedLink>
           )}
         </div>
       </div>

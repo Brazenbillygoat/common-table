@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { GuardedLink as Link } from "@/components/navigation/GuardedLink";
 
 import styles from "./recipe-edit-navigation.module.scss";
 
@@ -7,10 +7,16 @@ export function RecipeEditNavigation({
   currentStage,
 }: {
   recipeId: string;
-  currentStage: "ingredients" | "instructions" | "preview";
+  currentStage: "details" | "ingredients" | "instructions" | "preview";
 }) {
   return (
     <nav aria-label="Recipe editing" className={styles.navigation}>
+      <Link
+        aria-current={currentStage === "details" ? "page" : undefined}
+        href={`/recipes/${recipeId}/edit/details`}
+      >
+        Details
+      </Link>
       <Link
         aria-current={currentStage === "ingredients" ? "page" : undefined}
         href={`/recipes/${recipeId}/edit/ingredients`}
