@@ -1,0 +1,22 @@
+.controls {
+  margin: 1.5rem auto;
+  padding: 1rem;
+  max-width: 68rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  h2 {
+    font-size: 1.2rem;
+  }
+  button {
+    min-height: 44px;
+    margin: 0.25rem 0;
+    padding: 0.5rem 0.8rem;
+    cursor: pointer;
+  }
+}
+.offer {
+  margin-block: 1rem;
+}
+.note {
+  font-size: 0.9rem;
+}

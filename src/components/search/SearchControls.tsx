@@ -5,8 +5,14 @@ import { SEARCH_LIMITS, type SearchParameters } from "@/utils/recipe-search-quer
 import styles from "./search.module.scss";
 import { useRecipeSearchNavigation } from "./useRecipeSearchNavigation";
 
-export function SearchControls({ parameters }: { parameters: SearchParameters }) {
-  const search = useRecipeSearchNavigation(parameters);
+export function SearchControls({
+  parameters,
+  navigate,
+}: {
+  parameters: SearchParameters;
+  navigate?: (href: string) => void;
+}) {
+  const search = useRecipeSearchNavigation(parameters, navigate);
   const includeInput = useRef<HTMLInputElement>(null);
   const excludeInput = useRef<HTMLInputElement>(null);
   return (

@@ -5,6 +5,8 @@ import { SiteHeader } from "@/components/navigation/SiteHeader";
 import { UnsavedChangesProvider } from "@/components/navigation/UnsavedChangesProvider";
 import navigationStyles from "@/components/navigation/navigation.module.scss";
 import { getCurrentSession } from "@/server/auth/session";
+import { OfflineControls } from "@/components/offline/OfflineControls";
+import { OfflineNavigation } from "@/components/offline/OfflineNavigation";
 
 import "@/styles/globals.scss";
 
@@ -57,6 +59,8 @@ export default async function RootLayout({
         <UnsavedChangesProvider>
           <SiteHeader viewer={viewer} />
           <div className={navigationStyles.appFrame}>{children}</div>
+          <OfflineNavigation />
+          <OfflineControls />
           <MobileNavigation />
         </UnsavedChangesProvider>
       </body>

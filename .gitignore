@@ -50,3 +50,6 @@ next-env.d.ts
 # test artifacts
 /test-results/
 /playwright-report/
+/public/offline-sw.js
+/public/offline-assets.json
+/.next-offline-e2e/

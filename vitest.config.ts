@@ -13,8 +13,8 @@ export default defineConfig({
     // Database integration tests are opt-in because they need the local PostgreSQL container.
     exclude:
       process.env.RUN_DATABASE_TESTS === "1"
-        ? configDefaults.exclude
-        : [...configDefaults.exclude, "**/*.integration.test.ts"],
+        ? [...configDefaults.exclude, "e2e/**", ".next-offline-e2e/**"]
+        : [...configDefaults.exclude, "**/*.integration.test.ts", "e2e/**", ".next-offline-e2e/**"],
     setupFiles: ["./vitest.setup.ts"],
     coverage: {
       reporter: ["text", "html"],

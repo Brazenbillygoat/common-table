@@ -21,6 +21,31 @@ export function RecipeCookingContent({
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  return (
+    <RecipeCookingView
+      content={content}
+      emptyChoicesMessage={emptyChoicesMessage}
+      pathname={pathname}
+      searchParams={searchParams}
+    />
+  );
+}
+
+// The anonymous offline shell supplies native URL state without a server router.
+// Both entry points share all validation, controls and cooking presentation.
+export function RecipeCookingView({
+  content,
+  emptyChoicesMessage = "This recipe has no ingredient choices.",
+  pathname,
+  searchParams,
+  onNavigate,
+}: {
+  content: RecipeAlternativeContent;
+  emptyChoicesMessage?: string;
+  pathname: string;
+  searchParams: Pick<URLSearchParams, "getAll" | "toString">;
+  onNavigate?: () => void;
+}) {
   const [hideUnused, setHideUnused] = useState(false);
   const choiceOptionIds = searchParams.getAll("choice");
   const optionalIngredientIds = searchParams.getAll("optional");
@@ -50,6 +75,7 @@ export function RecipeCookingContent({
       "",
       `${query ? `${pathname}?${query}` : pathname}${window.location.hash}`,
     );
+    onNavigate?.();
   }
 
   function choose(groupId: string, optionId: string | null) {
