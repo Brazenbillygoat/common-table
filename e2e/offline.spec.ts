@@ -54,7 +54,7 @@ async function network(
 }
 async function setup(page: Page) {
   await page.goto("/");
-  await controls(page).getByRole("button", { name: "Sync now", exact: true }).click();
+  await controls(page).getByRole("button", { name: "Download now", exact: true }).click();
   await expect(controls(page)).toContainText("Available offline", { timeout: 30_000 });
 }
 async function stored(page: Page) {
@@ -79,7 +79,16 @@ test("consent, Later suppression and unchanged checks transfer no recipe collect
   request,
 }) => {
   await page.goto("/");
-  await expect(controls(page).getByRole("button", { name: "Sync now", exact: true })).toBeVisible();
+  await expect(
+    controls(page).getByRole("button", { name: "Download now", exact: true }),
+  ).toBeVisible();
+  await expect(controls(page)).toContainText("No offline download saved yet");
+  await expect(
+    controls(page).getByRole("button", { name: "Check for updates", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    controls(page).getByRole("button", { name: "Remove offline downloads", exact: true }),
+  ).toHaveCount(0);
   expect(await stored(page)).toBeNull();
   expect(
     await page.evaluate(() =>
@@ -89,14 +98,14 @@ test("consent, Later suppression and unchanged checks transfer no recipe collect
   expect((await (await request.get("/__test/control")).json()).downloads).toHaveLength(0);
   await controls(page).getByRole("button", { name: "Later", exact: true }).click();
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await expect(controls(page).getByRole("button", { name: "Sync now", exact: true })).toHaveCount(
-    0,
-  );
-  await controls(page).getByRole("button", { name: "Sync", exact: true }).click();
-  await controls(page).getByRole("button", { name: "Sync now", exact: true }).click();
+  await expect(
+    controls(page).getByRole("button", { name: "Download now", exact: true }),
+  ).toHaveCount(0);
+  await controls(page).getByRole("button", { name: "Check for updates", exact: true }).click();
+  await controls(page).getByRole("button", { name: "Download now", exact: true }).click();
   await expect(controls(page)).toContainText("Available offline");
   const before = await stored(page);
-  await controls(page).getByRole("button", { name: "Sync", exact: true }).click();
+  await controls(page).getByRole("button", { name: "Check for updates", exact: true }).click();
   await expect(controls(page)).toContainText("up to date");
   expect(await stored(page)).toBe(before);
   expect((await (await request.get("/__test/control")).json()).downloads).toHaveLength(1);
@@ -149,7 +158,7 @@ test("Later retains saved content while online reads are current; sync sends del
   const before = await stored(page);
   await fixture.update();
   await fixture.unpublish();
-  await controls(page).getByRole("button", { name: "Sync", exact: true }).click();
+  await controls(page).getByRole("button", { name: "Check for updates", exact: true }).click();
   await expect(controls(page)).toContainText("1 changed recipes, and 1 removals");
   await controls(page).getByRole("button", { name: "Later", exact: true }).click();
   expect(await stored(page)).toBe(before);
@@ -161,8 +170,8 @@ test("Later retains saved content while online reads are current; sync sends del
   await page.reload();
   await expect(page.getByRole("heading", { name: "Offline stew 00", exact: true })).toBeVisible();
   await network(context, false, request, browserName);
-  await controls(page).getByRole("button", { name: "Sync", exact: true }).click();
-  await controls(page).getByRole("button", { name: "Sync now", exact: true }).click();
+  // Reconnection presents the offer directly; the check button is replaced.
+  await controls(page).getByRole("button", { name: "Download now", exact: true }).click();
   await expect(controls(page)).toContainText("download complete");
   // An open cooking page retains the recipe it loaded even after sync.
   await expect(page.getByRole("heading", { name: "Offline stew 00", exact: true })).toBeVisible();
@@ -179,24 +188,30 @@ test("Later retains saved content while online reads are current; sync sends del
   ]);
 });
 
-for (const fault of ["interrupt", "invalid", "quota"] as const) {
+for (const fault of ["interrupt", "invalid", "quota", "storage"] as const) {
   test(`${fault} failure preserves the previous complete collection`, async ({ page, request }) => {
     await setup(page);
     const before = await stored(page);
     await fixture.update();
-    await controls(page).getByRole("button", { name: "Sync", exact: true }).click();
-    if (fault === "quota")
-      await page.evaluate(() => {
+    await controls(page).getByRole("button", { name: "Check for updates", exact: true }).click();
+    if (fault === "quota" || fault === "storage")
+      await page.evaluate((fault) => {
         const original = IDBObjectStore.prototype.put;
         IDBObjectStore.prototype.put = function (...args: Parameters<IDBObjectStore["put"]>) {
           if (this.name === "collection")
-            throw new DOMException("Full device", "QuotaExceededError");
+            throw new DOMException(
+              "Storage write failed",
+              fault === "quota" ? "QuotaExceededError" : "UnknownError",
+            );
           return original.apply(this, args);
         };
-      });
+      }, fault);
     else await request.post("/__test/control", { data: { fault } });
-    await controls(page).getByRole("button", { name: "Sync now", exact: true }).click();
+    await controls(page).getByRole("button", { name: "Download now", exact: true }).click();
     await expect(controls(page).getByRole("alert")).toBeVisible();
+    if (fault === "quota")
+      await expect(controls(page).getByRole("alert")).toContainText("Not enough device space");
+    else await expect(controls(page).getByRole("alert")).not.toContainText("device space");
     expect(await stored(page)).toBe(before);
     await expect(controls(page)).toContainText("Available offline");
   });
@@ -208,51 +223,63 @@ test("a publication change between offer and consent refreshes the offer without
   await setup(page);
   const before = await stored(page);
   await fixture.update();
-  await controls(page).getByRole("button", { name: "Sync", exact: true }).click();
+  await controls(page).getByRole("button", { name: "Check for updates", exact: true }).click();
   await fixture.unpublish();
-  await controls(page).getByRole("button", { name: "Sync now", exact: true }).click();
+  await controls(page).getByRole("button", { name: "Download now", exact: true }).click();
   await expect(controls(page)).toContainText("1 removals");
   expect(await stored(page)).toBe(before);
 });
 
-test("incomplete app setup and confirmed removal are honest and scoped", async ({
-  page,
-  context,
-  request,
-}) => {
-  await page.goto("/");
-  await expect(controls(page).getByRole("button", { name: "Sync now", exact: true })).toBeVisible();
-  await request.post("/__test/control", { data: { fault: "app" } });
-  await controls(page).getByRole("button", { name: "Sync now", exact: true }).click();
-  await expect(controls(page).getByRole("alert")).toBeVisible();
-  await expect(controls(page)).toContainText("Offline setup incomplete");
-  expect(await stored(page)).toBeNull();
-  await request.post("/__test/control", { data: { fault: "" } });
-  await controls(page).getByRole("button", { name: "Sync now", exact: true }).click();
-  await expect(controls(page)).toContainText("Available offline");
-  await page.evaluate(async () => {
-    localStorage.setItem("unrelated-data", "keep");
-    await caches.open("unrelated-cache");
+for (const fault of ["app", "app-integrity"] as const) {
+  test(`${fault} setup failure and confirmed removal are honest and scoped`, async ({
+    page,
+    context,
+    request,
+  }) => {
+    await page.goto("/");
+    await expect(
+      controls(page).getByRole("button", { name: "Download now", exact: true }),
+    ).toBeVisible();
+    await request.post("/__test/control", { data: { fault } });
+    await controls(page).getByRole("button", { name: "Download now", exact: true }).click();
+    await expect(controls(page).getByRole("alert")).toBeVisible();
+    await expect(controls(page)).toContainText("Offline download needs to be completed");
+    await expect(controls(page).getByRole("alert")).toContainText("Offline app setup failed");
+    await expect(controls(page).getByRole("alert")).not.toContainText("device space");
+    expect(await stored(page)).toBeNull();
+    await request.post("/__test/control", { data: { fault: "" } });
+    await controls(page).getByRole("button", { name: "Download now", exact: true }).click();
+    await expect(controls(page)).toContainText("Available offline");
+    await page.evaluate(async () => {
+      localStorage.setItem("unrelated-data", "keep");
+      await caches.open("unrelated-cache");
+    });
+    await context.addCookies([
+      { name: "unrelated-cookie", value: "keep", url: "http://localhost:3110" },
+    ]);
+    await controls(page)
+      .getByRole("button", { name: "Remove offline downloads", exact: true })
+      .click();
+    expect(await stored(page)).not.toBeNull();
+    await controls(page).getByRole("button", { name: "Cancel", exact: true }).click();
+    await controls(page)
+      .getByRole("button", { name: "Remove offline downloads", exact: true })
+      .click();
+    await controls(page).getByRole("button", { name: "Confirm removal", exact: true }).click();
+    await expect(controls(page)).toContainText("removed from this device");
+    await expect(controls(page)).toContainText("No offline download saved yet");
+    await expect(
+      controls(page).getByRole("button", { name: "Remove offline downloads", exact: true }),
+    ).toHaveCount(0);
+    expect(await page.evaluate(() => caches.keys())).toEqual(["unrelated-cache"]);
+    expect(await page.evaluate(() => localStorage.getItem("unrelated-data"))).toBe("keep");
+    expect((await context.cookies()).some((cookie) => cookie.name === "unrelated-cookie")).toBe(
+      true,
+    );
+    await page.reload();
+    await expect(controls(page)).toContainText("No offline download saved yet");
   });
-  await context.addCookies([
-    { name: "unrelated-cookie", value: "keep", url: "http://localhost:3110" },
-  ]);
-  await controls(page)
-    .getByRole("button", { name: "Remove offline downloads", exact: true })
-    .click();
-  expect(await stored(page)).not.toBeNull();
-  await controls(page).getByRole("button", { name: "Cancel", exact: true }).click();
-  await controls(page)
-    .getByRole("button", { name: "Remove offline downloads", exact: true })
-    .click();
-  await controls(page).getByRole("button", { name: "Confirm removal", exact: true }).click();
-  await expect(controls(page)).toContainText("removed from this device");
-  expect(await page.evaluate(() => caches.keys())).toEqual(["unrelated-cache"]);
-  expect(await page.evaluate(() => localStorage.getItem("unrelated-data"))).toBe("keep");
-  expect((await context.cookies()).some((cookie) => cookie.name === "unrelated-cookie")).toBe(true);
-  await page.reload();
-  await expect(controls(page)).toContainText("Offline setup incomplete");
-});
+}
 
 test("a legitimate empty publication collection is available offline after consent", async ({
   page,
@@ -283,7 +310,9 @@ test("reconnection checks a recent publication change without downloading it", a
   await network(context, true, request, browserName);
   await fixture.update();
   await network(context, false, request, browserName);
-  await expect(controls(page).getByRole("button", { name: "Sync now", exact: true })).toBeVisible();
+  await expect(
+    controls(page).getByRole("button", { name: "Download now", exact: true }),
+  ).toBeVisible();
   expect(await stored(page)).toBe(before);
   expect((await (await request.get("/__test/control")).json()).downloads).toHaveLength(1);
 });
@@ -425,7 +454,7 @@ test("a browser process restart can cold-open a never-visited recipe offline", a
   }
 });
 
-test("evicted app files or recipe storage are reported as incomplete and can be downloaded again", async ({
+test("evicted app files or recipe storage need a new download and can be recovered", async ({
   page,
 }) => {
   await setup(page);
@@ -439,8 +468,8 @@ test("evicted app files or recipe storage are reported as incomplete and can be 
     });
   });
   await page.reload();
-  await expect(controls(page)).toContainText("Offline setup incomplete");
-  await controls(page).getByRole("button", { name: "Sync now", exact: true }).click();
+  await expect(controls(page)).toContainText("Offline download needs to be completed");
+  await controls(page).getByRole("button", { name: "Download now", exact: true }).click();
   await expect(controls(page)).toContainText("Available offline");
 });
 
@@ -456,10 +485,9 @@ test("unpublishing does not replace an already open offline cooking page", async
   await cook.goto(`/r/${fixture.snapshots[1].recipe.slug}`);
   await cook.getByRole("radio", { name: "Tofu", exact: true }).check();
   await cook.getByRole("button", { name: "Instructions", exact: true }).click();
-  await network(context, false, request, browserName);
   await fixture.unpublish();
-  await controls(page).getByRole("button", { name: "Sync", exact: true }).click();
-  await controls(page).getByRole("button", { name: "Sync now", exact: true }).click();
+  await network(context, false, request, browserName);
+  await controls(page).getByRole("button", { name: "Download now", exact: true }).click();
   await expect(controls(page)).toContainText("download complete");
   await expect(cook.getByRole("heading", { name: "Offline stew 01", exact: true })).toBeVisible();
   await expect(cook.getByRole("radio", { name: "Tofu", exact: true })).toBeChecked();

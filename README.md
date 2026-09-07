@@ -22,29 +22,39 @@ browsing, searching, and cooking. Authoring requires an internet connection.
 
 ## Optional offline recipes
 
-Choose **Sync now** in Offline recipes to save every published recipe and the
+Choose **Download now** in Offline recipes to save every published recipe and the
 anonymous app files on that device. The first offer estimates recipe data and
 app files separately. Later offers describe added or changed recipes and
 removals. **Later** keeps your saved collection; online pages still read current
-publications. The manual **Sync** control checks again without downloading until
-you approve the offer. No sign-in is needed.
+publications. **Check for updates** checks again and presents a download offer
+when needed. Only **Download now** starts the recipe download. No sign-in is needed.
 
 **Available offline** means the complete saved collection and required app files
-are ready. Offline pages show the last successful sync time and use the same
-search, filters, sorting, pagination, cooking choices and URL state as online
+are ready, with the last successful download time shown. Offline pages use the
+same search, filters, sorting, pagination, cooking choices and URL state as online
 pages. Recipes do not have to be individually opened before going offline.
 
 Interrupted, inconsistent, invalid or oversized downloads and failed storage
 writes preserve the previous complete recipe collection. Limits are 1,000
-recipes, 20 MiB of recipe JSON and 256 KiB per sync request. Retry after
-reconnecting or freeing space. A confirmed **Remove offline downloads** clears
+recipes, 20 MiB of recipe JSON and 256 KiB per sync request. Failure messages
+suggest freeing space only when the browser reports a storage quota error.
+A generic app setup failure does not establish its cause; retry after reloading.
+A confirmed **Remove offline downloads** clears
 only this app's downloaded recipes and offline files, preserving cloud data and sign-in.
 Safari may evict website storage. Downloads are not a permanent backup; loss of
-the entire installation requires reconnecting and downloading again.
+the entire installation requires reconnecting and downloading again. Expand
+**About offline downloads** for this guidance. Having no saved download, including
+after removal, is a normal state.
 
 Prepared app updates wait until all Common Table pages close. Existing cooking
 pages retain their loaded recipe, choices and display state, even after a recipe
 is updated or unpublished. Close and reopen to use a prepared app version.
+
+For this project's Vercel deployment, keep **Production Deployments** under
+**Vercel Toolbar** set to **Off**. A setting change needs a new deployment; when
+clearing previously injected toolbar code, redeploy without the existing build
+cache. Hosted offline assets must exactly match their build manifest. Injected
+code changes their size/hash and correctly causes offline setup to fail.
 
 ### Offline verification
 

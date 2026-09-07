@@ -2,6 +2,13 @@ import { assembleCollection, type OfflineCollection } from "@/utils/offline-prot
 
 export const DATABASE_NAME = "common-table-offline";
 const STORE = "collection";
+function writeFailure(problem: unknown) {
+  return new Error(
+    problem instanceof DOMException && problem.name === "QuotaExceededError"
+      ? "Not enough device space to save the download. Free some space and try again."
+      : "Could not save the download. Try again. Your saved recipes have not changed.",
+  );
+}
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, 1);
@@ -53,19 +60,32 @@ export async function allowAppDownload(expectedToken: string | null) {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction([STORE, "settings"], "readwrite");
       const current = tx.objectStore(STORE).get("current");
+      let conflict = false;
+      let writeError: unknown;
       current.onsuccess = () => {
         if ((current.result?.token ?? null) !== expectedToken) {
+          conflict = true;
           tx.abort();
           return;
         }
         const settings = tx.objectStore("settings");
         const read = settings.get("consent");
         read.onsuccess = () => {
-          if (!read.result) settings.put(crypto.randomUUID(), "consent");
+          try {
+            if (!read.result) settings.put(crypto.randomUUID(), "consent");
+          } catch (problem) {
+            writeError = problem;
+            tx.abort();
+          }
         };
       };
       tx.oncomplete = () => resolve();
-      tx.onabort = () => reject(new Error("Offline setup changed in another page. Check again."));
+      tx.onabort = () =>
+        reject(
+          conflict
+            ? new Error("Offline setup changed in another page. Check again.")
+            : writeFailure(writeError ?? tx.error),
+        );
     });
   } finally {
     db.close();
@@ -79,6 +99,7 @@ export async function replaceCollection(next: OfflineCollection, expectedToken: 
       const store = tx.objectStore(STORE);
       const request = store.get("current");
       let conflict = false;
+      let writeError: unknown;
       request.onsuccess = () => {
         if ((request.result?.token ?? null) !== expectedToken) {
           conflict = true;
@@ -86,7 +107,8 @@ export async function replaceCollection(next: OfflineCollection, expectedToken: 
         } else {
           try {
             store.put(next, "current");
-          } catch {
+          } catch (problem) {
+            writeError = problem;
             tx.abort();
           }
         }
@@ -95,11 +117,9 @@ export async function replaceCollection(next: OfflineCollection, expectedToken: 
       tx.oncomplete = () => resolve();
       tx.onabort = () =>
         reject(
-          new Error(
-            conflict
-              ? "Offline storage changed in another page. Check again."
-              : "Could not save the download. Free device space and retry.",
-          ),
+          conflict
+            ? new Error("Offline storage changed in another page. Check again.")
+            : writeFailure(writeError ?? tx.error),
         );
       tx.onerror = () => {};
     });

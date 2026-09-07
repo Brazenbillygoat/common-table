@@ -103,7 +103,9 @@ async function prepareApp(expectedToken: string | null) {
           clearTimeout(timer);
           pending!.removeEventListener("statechange", changed);
           if (pending!.state === "redundant")
-            reject(new Error("App files could not be saved. Free device space and retry."));
+            // A failed install does not expose its cause here. Integrity,
+            // network and storage failures must not all be labelled as quota.
+            reject(new Error("Offline app setup failed. Reload the page and try again."));
           else resolve();
         }
       }
